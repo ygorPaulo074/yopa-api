@@ -1,0 +1,28 @@
+# Core
+fastapi
+uvicorn
+
+# IA
+litellm
+
+# Validação e configuração
+pydantic
+python-dotenv
+
+# Rate limiting
+slowapi
+
+# Análise local de conversas
+textblob
+spacy
+
+# Extração de texto de arquivos
+pdfplumber
+
+# Logs
+loguru
+
+# Testes
+pytest
+httpx
+invoke

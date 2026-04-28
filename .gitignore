@@ -1,0 +1,30 @@
+# Ambiente
+.env
+.venv
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Dados gerados em runtime
+data/agents/
+
+# Logs
+src/agents/logs/error.log
+src/agents/logs/access.log
+
+# Setup
+.initialized
+
+# Testes
+.pytest_cache/
+htmlcov/
+.coverage
+
+# IDEs
+.vscode/
+.idea/
+
+# Sistema
+.DS_Store
+Thumbs.db
