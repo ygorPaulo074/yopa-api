@@ -126,11 +126,12 @@ def run_setup():
             while True:
                 print("\n\033[1m" + "DATA SCHEMA:" + "\033[0m")
                 print("This API uses a predefined schema for data accuracy.")
-                use_prebuilt_schema = input("Do you want to use the pre-built SQL schema? (yes/no): ").strip().lower()
+                use_prebuilt_schema = input("Do you want to use the pre-built SQL schema? [You can analyse it at our wiki: " 
+                "https://github.com/your-repo/wiki] (yes/no): ").strip().lower()
 
                 if use_prebuilt_schema in ["yes", "sim"]:
                     os.makedirs("scripts", exist_ok=True)
-                    print("\nSelect the schema format:")
+                    print("\nSelect the schema format: ")
                     schema_type = input("1. SQL Script\n2. Prisma Migrate\nOption: ")
 
                     if schema_type == "1":
@@ -140,6 +141,11 @@ def run_setup():
 
                     print("\n\033[1m" + "Success:" + "\033[0m" + " Schema scripts created in 'scripts/'.")
                     print("Review and execute the scripts against your database.\n")
+
+                    print("\033[1m" + "Important:" + "\033[0m" + " If you are using docker, you can use our pre-made docker-compose.yml. "
+                    "Do you want to generate a docker-compose.yml with the database service included [You can analyse it at our wiki: https://github.com/your-repo/wiki]? (yes/no): ")
+                                                                                                                                      # TODO: Criar wiki 
+
                     break
                 elif use_prebuilt_schema in ["no", "nao"]:
                     print("\n\033[1m" + "Warning:" + "\033[0m" + " Make sure to create tables and schema in the database before running the application.")
