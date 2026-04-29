@@ -2,6 +2,7 @@ import litellm
 import re
 import os
 from pydantic import BaseModel, HttpUrl, ValidationError
+from litellm.exceptions import AuthenticationError
 from src.tools.create_db_scripts import (
     create_sql_scripts,
     create_prisma_migrate,
@@ -36,7 +37,7 @@ def validate_api_key(api_key, model):
             max_tokens=1
         )
         return True
-    except litellm.AuthenticationError:
+    except AuthenticationError:
         print("Invalid API key. Please enter a valid API key.")
         return False
     except Exception as e:
@@ -57,10 +58,10 @@ def validate_database_url(database_url):
 def get_allowed_origins() -> str:
     while True:
         raw = input("Allowed origins (comma separated) [default: http://localhost]: ") or "http://localhost"
-        origins = [o.strip() for o in raw.split(",")]
+        origins = [HttpUrl(o.strip()) for o in raw.split(",")]
         try:
             CORSConfig(allowed_origins=origins)
-            return ",".join(origins)
+            return ",".join(str(origin) for origin in origins)
         except ValidationError:
             print("Invalid URL detected. Please enter valid URLs (ex: https://your-website.com).")
 
