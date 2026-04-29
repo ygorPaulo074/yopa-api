@@ -2,7 +2,12 @@ import litellm
 import re
 import os
 from pydantic import BaseModel, HttpUrl, ValidationError
-from src.tools.create_db_scripts import create_sql_scripts, create_prisma_migrate
+from src.tools.create_db_scripts import (
+    create_sql_scripts,
+    create_prisma_migrate,
+    generate_docker_compose,
+    create_docker_compose_with_db
+)
 from typing import List
 
 PROVIDER_OPTIONS = {
@@ -44,7 +49,7 @@ def validate_database_url(database_url):
         return True
     print("Invalid database URL format. Expected: driver://user:password@host:port/database")
     return False
-    
+
 def get_allowed_origins() -> str:
     while True:
         raw = input("Allowed origins (comma separated) [default: http://localhost]: ") or "http://localhost"
@@ -64,12 +69,15 @@ def run_setup():
 
     data_path = "./data"
     database_url = ""
+    db_user = ""
+    db_password = ""
+    db_name = ""
     webhook_url = ""
-    
+
     print("\n" + "\033[1m" + "=== INITIAL SYSTEM CONFIGURATION ===" + "\033[0m")
     print("\033[1m" + "WARNING:" + "\033[0m" + " This setup process should be executed only once.")
     print("To reset, delete the file" + "\033[1m" + " .initialized" + "\033[0m" + " and run again.\n")
-    
+
     print("\033[1m" + "STEP 1: SELECT AI PROVIDER" + "\033[0m")
     print("Available options:")
     for key, value in PROVIDER_OPTIONS.items():
@@ -80,7 +88,7 @@ def run_setup():
             model = PROVIDER_OPTIONS[provider_choice]
             break
         print("\033[1m" + "Error:" + "\033[0m" + " Invalid selection. Enter a valid number.")
-    
+
     print(f"\n\033[1m" + "STEP 2: AUTHENTICATION" + "\033[0m")
     api_key = input(f"Enter your API key for {model}: ")
     while not validate_api_key(api_key, model):
@@ -105,29 +113,37 @@ def run_setup():
         print("Storage options:")
         for key, value in STORAGE_OPTIONS.items():
             print(f"  {key}. {value}")
-        storage_type = input("\nSelect storage type [default: Local]: ") or "Local"
+        storage_type = input("\nSelect storage type [default: Local]: ") or "1"
 
         if storage_type in ["1", "Local"]:
             print("\n\033[1m" + "CONFIGURATION: LOCAL STORAGE" + "\033[0m")
             data_path = input("Path to storage directory (ex: /path/to/storage)\n"
-            "Make sure the application has read/write permissions: ") or "./data"
+                              "Make sure the application has read/write permissions: ") or "./data"
 
         elif storage_type in ["2", "Database"]:
             print("\n\033[1m" + "CONFIGURATION: DATABASE STORAGE" + "\033[0m")
             database_url = input("Enter the database connection string:\n"
-            "Format: protocol://user:password@host:port/database\n> ")
-
+                                 "Format: protocol://user:password@host:port/database\n> ")
             while not validate_database_url(database_url):
                 database_url = input("Try again - Enter the database connection string:\n"
-                "Format: protocol://user:password@host:port/database\n> ")
+                                     "Format: protocol://user:password@host:port/database\n> ")
+
+            print("\n\033[1m" + "DATABASE CREDENTIALS" + "\033[0m")
+            print("These are required for the database service in docker-compose.")
+            db_user = input("Database user [default: postgres]: ") or "postgres"
+            db_password = input("Database password: ")
+            while not db_password:
+                print("\033[1m" + "Error:" + "\033[0m" + " Password cannot be empty.")
+                db_password = input("Database password: ")
+            db_name = input("Database name [default: chatbot]: ") or "chatbot"
 
             print("\n\033[1m" + "Attention:" + "\033[0m" + " This only validates the format, please make sure the database is accessible.")
 
             while True:
                 print("\n\033[1m" + "DATA SCHEMA:" + "\033[0m")
                 print("This API uses a predefined schema for data accuracy.")
-                use_prebuilt_schema = input("Do you want to use the pre-built SQL schema? [You can analyse it at our wiki: " 
-                "https://github.com/your-repo/wiki] (yes/no): ").strip().lower()
+                use_prebuilt_schema = input("Do you want to use the pre-built SQL schema? [You can analyse it at our wiki: "
+                                            "https://github.com/your-repo/wiki] (yes/no): ").strip().lower()
 
                 if use_prebuilt_schema in ["yes", "sim"]:
                     os.makedirs("scripts", exist_ok=True)
@@ -142,11 +158,21 @@ def run_setup():
                     print("\n\033[1m" + "Success:" + "\033[0m" + " Schema scripts created in 'scripts/'.")
                     print("Review and execute the scripts against your database.\n")
 
-                    print("\033[1m" + "Important:" + "\033[0m" + " If you are using docker, you can use our pre-made docker-compose.yml. "
-                    "Do you want to generate a docker-compose.yml with the database service included [You can analyse it at our wiki: https://github.com/your-repo/wiki]? (yes/no): ")
-                                                                                                                                      # TODO: Criar wiki 
+                    print("\033[1m" + "Important:" + "\033[0m" + " If you are using Docker, you can generate a docker-compose.yml. "
+                          "We provide 2 options: one with the database service and schema already applied on first run, "
+                          "and one without the database service (if you manage the database externally). "
+                          "[You can analyse it at our wiki: https://github.com/your-repo/wiki]")
 
+                    generate_compose = input("Would you like to generate the docker-compose.yml? (yes/no): ").strip().lower()
+                    if generate_compose in ["yes", "sim"]:
+                        include_db = input("Include database service with schema applied on first run? (yes/no): ").strip().lower()
+                        if include_db in ["yes", "sim"]:
+                            create_docker_compose_with_db()
+                        else:
+                            generate_docker_compose()
+                        print("\n\033[1m" + "Success:" + "\033[0m" + " docker-compose.yml generated.\n")
                     break
+
                 elif use_prebuilt_schema in ["no", "nao"]:
                     print("\n\033[1m" + "Warning:" + "\033[0m" + " Make sure to create tables and schema in the database before running the application.")
                     break
@@ -166,7 +192,7 @@ def run_setup():
             break
 
     storage_type = STORAGE_OPTIONS.get(storage_type, storage_type)
-    
+
     print(f"\n\033[1m" + "STEP 6: CORS CONFIGURATION" + "\033[0m")
     allowed_origins = get_allowed_origins()
 
@@ -181,6 +207,9 @@ def run_setup():
             f.write(f"DATA_PATH={data_path}\n")
         elif storage_type == "Database":
             f.write(f"DATABASE_URL={database_url}\n")
+            f.write(f"DB_USER={db_user}\n")
+            f.write(f"DB_PASSWORD={db_password}\n")
+            f.write(f"DB_NAME={db_name}\n")
         elif storage_type == "Webhook":
             f.write(f"WEBHOOK_URL={webhook_url}\n")
         f.write(f"ALLOWED_ORIGINS={allowed_origins}\n")

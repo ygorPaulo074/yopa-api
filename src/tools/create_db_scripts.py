@@ -2,8 +2,7 @@ import os
 os.makedirs("scripts", exist_ok=True)
 
 def create_sql_scripts():
-    sql_script = """
-    -- =============================================================
+    sql_script = """-- =============================================================
 -- Chatbot API — Schema SQL
 -- Compatible with PostgreSQL, MySQL, SQLite
 -- =============================================================
@@ -121,13 +120,13 @@ CREATE INDEX idx_scores_session_id       ON scores(session_id);
 CREATE INDEX idx_scores_message_id       ON scores(message_id);
 CREATE INDEX idx_insights_session_id     ON insights(session_id);
 CREATE INDEX idx_agent_contexts_agent_id ON agent_contexts(agent_id);
-    """
+"""
     with open("scripts/schema.sql", "w") as f:
         f.write(sql_script)
 
+
 def create_prisma_migrate():
-    prisma_migrate = """
-// =============================================================
+    prisma_migrate = """// =============================================================
 // Chatbot API — Prisma Schema
 // Compatible with PostgreSQL, MySQL, SQLite
 // =============================================================
@@ -154,13 +153,13 @@ datasource db {
 // Agent
 // -------------------------------------------------------------
 model Agent {
-  agentId        String   @id @map("agent_id")
+  agentId        String    @id @map("agent_id")
   name           String
   owner          String
-  apiKey         String   @unique @map("api_key")
-  tags           String?  // comma-separated values
-  createdAt      DateTime @map("created_at")
-  updatedAt      DateTime @map("updated_at")
+  apiKey         String    @unique @map("api_key")
+  tags           String?   // comma-separated values
+  createdAt      DateTime  @map("created_at")
+  updatedAt      DateTime  @map("updated_at")
   activeSince    DateTime? @map("active_since")
   lastActivityAt DateTime? @map("last_activity_at")
 
@@ -176,19 +175,19 @@ model Agent {
 // One row per version. Current = MAX(version).
 // -------------------------------------------------------------
 model AgentContext {
-  id                 Int      @id @default(autoincrement())
-  agentId            String   @map("agent_id")
-  version            Int      @default(1)
-  tone               String?
-  language           String?
-  segment            String?
-  persona            String?
-  behavior           String?
-  fallbackMessage    String?  @map("fallback_message")
-  restrictions       Json?    // { topics: [], files: [] }
-  knowledgeBase      Json?    @map("knowledge_base") // { urls: [], files: [] }
-  escalationTrigger  Json?    @map("escalation_trigger") // { operator, conditions: [] }
-  updatedAt          DateTime @map("updated_at")
+  id                Int      @id @default(autoincrement())
+  agentId           String   @map("agent_id")
+  version           Int      @default(1)
+  tone              String?
+  language          String?
+  segment           String?
+  persona           String?
+  behavior          String?
+  fallbackMessage   String?  @map("fallback_message")
+  restrictions      Json?    // { topics: [], files: [] }
+  knowledgeBase     Json?    @map("knowledge_base")    // { urls: [], files: [] }
+  escalationTrigger Json?    @map("escalation_trigger") // { operator, conditions: [] }
+  updatedAt         DateTime @map("updated_at")
 
   agent Agent @relation(fields: [agentId], references: [agentId], onDelete: Cascade)
 
@@ -288,6 +287,63 @@ model Insight {
 
   @@map("insights")
 }
-    """
+"""
     with open("scripts/schema.prisma", "w") as f:
         f.write(prisma_migrate)
+
+
+def generate_docker_compose():
+    """docker-compose.yml — API only, no database service."""
+    content = """services:
+  api:
+    container_name: chatbot-api
+    build: .
+    ports:
+      - "${PORT:-8000}:${PORT:-8000}"
+    env_file:
+      - .env
+    restart: unless-stopped
+"""
+    with open("docker-compose.yml", "w") as f:
+        f.write(content)
+
+
+def create_docker_compose_with_db():
+    """docker-compose.yml — API + database, schema applied on first run."""
+    content = """services:
+  api:
+    container_name: chatbot-api
+    build: .
+    ports:
+      - "${PORT:-8000}:${PORT:-8000}"
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    container_name: chatbot-api-db
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+"""
+    with open("docker-compose.yml", "w") as f:
+        f.write(content)
