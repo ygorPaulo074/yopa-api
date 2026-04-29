@@ -4,7 +4,7 @@ from ..base_schemas import AgentContext, AgentContextBase
 
 
 class AgentCreateRequest(BaseModel):
-    name: str = Field(..., example="Meu Agente")
+    name: str 
     context: AgentContext
 
 

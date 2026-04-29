@@ -23,6 +23,7 @@ if os.getenv("RUN_MODE", "development") == "development" and not os.path.exists(
 class Settings(BaseSettings):
     AI_API_KEY: str = ""
     AI_MODEL: str = ""
+    AI_TIMEOUT: int = 30
     APP_NAME: str = "AI-ChatBot"
     RUN_MODE: str = "development"
     HOST: str = "0.0.0.0"
