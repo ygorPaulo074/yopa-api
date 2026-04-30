@@ -1,4 +1,5 @@
 import litellm
+import redis as redis_lib
 import re
 import os
 from pydantic import BaseModel, HttpUrl, ValidationError
@@ -43,6 +44,24 @@ def validate_api_key(api_key, model):
     except Exception as e:
         print(f"An unexpected error occurred while validating the API key: {e}")
         return False
+
+def validate_redis_url(redis_url: str) -> bool:
+    pattern = r"^rediss?://.*|^unix://.*"
+    if not re.match(pattern, redis_url):
+        print("Invalid format. Use redis://, rediss:// or unix://")
+        print("Examples:")
+        print("  redis://localhost:6379")
+        print("  redis://:password@localhost:6379")
+        print("  rediss://user:password@host:6380  (TLS)")
+        return False
+    try:
+        r = redis_lib.from_url(redis_url, socket_connect_timeout=5)
+        r.ping()
+        return True
+    except Exception as e:
+        print(f"Failed to connect to Redis: {e}")
+        return False
+
 
 def validate_database_url(database_url):
     pattern = r"^(postgresql|postgres|mysql|sqlite)(\+\w+)?://.*"
@@ -205,7 +224,22 @@ def run_setup():
 
     storage_type = STORAGE_OPTIONS.get(storage_type, storage_type)
 
-    print(f"\n\033[1m" + "STEP 6: CORS CONFIGURATION" + "\033[0m")
+    print(f"\n\033[1m" + "STEP 6: REDIS CONFIGURATION" + "\033[0m")
+    print("Redis is required — it handles context caching, session history and NLP scores.")
+    while True:
+        redis_url = input("Redis URL [default: redis://localhost:6379]: ").strip() or "redis://localhost:6379"
+        if validate_redis_url(redis_url):
+            break
+
+    session_ttl = "86400"
+    print(f"\n\033[1m" + "STEP 6.5: SESSION TTL" + "\033[0m")
+    while True:
+        session_ttl = input("Session TTL in seconds [default: 86400 (24h)]: ").strip() or "86400"
+        if session_ttl.isdigit():
+            break
+        print("\033[1m" + "Error:" + "\033[0m" + " Enter a valid number.")
+
+    print(f"\n\033[1m" + "STEP 7: CORS CONFIGURATION" + "\033[0m")
     allowed_origins = get_allowed_origins()
 
     print(f"\n\033[1m" + "FINALIZING CONFIGURATION..." + "\033[0m")
@@ -225,6 +259,8 @@ def run_setup():
             f.write(f"DB_NAME={db_name}\n")
         elif storage_type == "Webhook":
             f.write(f"WEBHOOK_URL={webhook_url}\n")
+        f.write(f"REDIS_URL={redis_url}\n")
+        f.write(f"SESSION_TTL={session_ttl}\n")
         f.write(f"ALLOWED_ORIGINS={allowed_origins}\n")
 
     raise_initialization_flag()

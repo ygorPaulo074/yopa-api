@@ -5,6 +5,9 @@ uvicorn
 # IA
 litellm
 
+# Cache
+redis
+
 # Validação e configuração
 pydantic
 pydantic-settings

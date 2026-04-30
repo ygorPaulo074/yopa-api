@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     DATA_PATH: str = "./data"
     ALLOWED_ORIGINS: list[str] = ["http://localhost"]
     LOG_LEVEL: str = "INFO"
+    REDIS_URL: str = "redis://localhost:6379"
+    SESSION_TTL: int = 86400
 
     class Config:
         env_file = ".env"

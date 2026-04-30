@@ -45,6 +45,7 @@
 - [Pasta data/](#pasta-data)
 - [Contexto dos Agentes](#contexto-dos-agentes)
 - [Análise Local de Conversas](#análise-local-de-conversas)
+- [Cache Redis](#cache-redis)
 - [Requisitos](#requisitos)
 - [Instalação](#instalação)
 
@@ -101,6 +102,18 @@ Define o modo de execução: `development` ou `production`. Em `development`, a 
 **Porta**
 
 Porta em que o servidor vai rodar. Padrão: `8000`. Somente valores numéricos são aceitos.
+
+**Redis**
+
+URL de conexão com o Redis. Obrigatório — o Redis é a espinha dorsal do cache de contexto, histórico de sessões e scores NLP. O setup valida a conexão via `PING` antes de gravar o `.env`. Padrão: `redis://localhost:6379`.
+
+Formatos aceitos:
+- `redis://localhost:6379` — conexão local sem autenticação
+- `redis://:senha@localhost:6379` — com senha
+- `rediss://user:senha@host:6380` — com TLS (serviços gerenciados: Upstash, Redis Cloud, ElastiCache)
+- `unix:///caminho/para/socket` — socket Unix
+
+O TTL das sessões define por quantos segundos o histórico de conversa e os scores ficam em cache após a última mensagem. Padrão: `86400` (24 horas).
 
 **Origens permitidas (CORS)**
 
@@ -955,6 +968,10 @@ AI-ChatBot/
     ├── core/                      # lógica central e utilitários transversais
     │   ├── context_builder.py     # AgentContext (Pydantic) → context.xml ✅
     │   ├── security.py            # sanitização de PII, hash de API Key (placeholder)
+    │   ├── cache/                 # camada de cache Redis
+    │   │   ├── __init__.py
+    │   │   ├── client.py          # CacheClient — contexto, histórico, scores e meta de sessão
+    │   │   └── keys.py            # helpers de nomeação de chaves Redis
     │   └── persistence/           # Strategy Pattern — abstração de storage
     │       ├── __init__.py
     │       ├── base.py            # interface abstrata — contrato dos drivers
@@ -1122,6 +1139,45 @@ Gerado pela IA sob demanda via `GET /data/chat/{session_id}/insights` ou `GET /d
 
 ---
 
+<a id="cache-redis"></a>
+## Cache Redis
+
+O Redis é obrigatório e atua como camada de acesso rápido entre o `POST /chat` e o storage durável. Mantém em memória tudo que é necessário para o ciclo de vida de uma sessão, evitando I/O de disco ou queries ao banco a cada requisição.
+
+### O que é armazenado
+
+| Chave | Estrutura | TTL | Descrição |
+|---|---|---|---|
+| `agent:{agent_id}:context` | String | sem TTL fixo | `context.xml` do agente — invalidado no `PUT /agent/context` |
+| `session:{session_id}:history` | List | `SESSION_TTL` | histórico de mensagens da sessão (RPUSH por mensagem) |
+| `session:{session_id}:scores` | String (JSON) | `SESSION_TTL` | scores NLP acumulados pelo `quality_analyzer` |
+| `session:{session_id}:meta` | Hash | `SESSION_TTL` | metadados da sessão: `agent_id`, `user_id`, timestamps, estado |
+
+### Fluxo no `POST /chat`
+
+```
+1. Carrega context.xml do Redis          (ou storage → Redis se miss)
+2. Carrega histórico da sessão do Redis
+3. Envia contexto + histórico para o modelo via ai_client
+4. Adiciona mensagens ao histórico via RPUSH  (renova TTL)
+5. quality_analyzer atualiza scores no Redis
+```
+
+### Encerramento de sessão
+
+Quando `POST /chat/{session_id}/end` é chamado, os dados são persistidos no storage durável e as chaves da sessão são removidas do Redis via `delete_session()`, liberando memória imediatamente.
+
+### Formatos de URL suportados
+
+```
+redis://localhost:6379                  # local sem auth
+redis://:senha@localhost:6379           # com senha
+rediss://user:senha@host:6380           # TLS (Upstash, Redis Cloud, ElastiCache)
+unix:///caminho/para/socket             # socket Unix
+```
+
+---
+
 <a id="análise-local-de-conversas"></a>
 ## Análise Local de Conversas
 
@@ -1156,6 +1212,9 @@ python-dotenv
 
 # Rate limiting
 slowapi
+
+# Cache
+redis
 
 # Análise local de conversas
 textblob
@@ -1221,6 +1280,10 @@ LOG_LEVEL=INFO
 
 # Dados
 DATA_PATH=./data
+
+# Cache Redis
+REDIS_URL=redis://localhost:6379
+SESSION_TTL=86400
 ```
 
 ### Modelos suportados nativamente
