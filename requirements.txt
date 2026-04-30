@@ -20,6 +20,10 @@ slowapi
 textblob
 spacy
 
+# Sanitização de PII
+presidio-analyzer
+presidio-anonymizer
+
 # Extração de texto de arquivos
 pdfplumber
 

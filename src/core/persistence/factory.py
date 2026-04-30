@@ -3,4 +3,7 @@ Resolve e instancia o driver de persistência correto com base no STORAGE_TYPE d
 Valores válidos: 'Local', 'Database', 'Webhook'.
 Usado pelos services para obter o driver sem depender de um concreto —
 toda a troca de storage ocorre aqui, sem tocar na lógica de negócio.
+
+As operações de segurança (sanitização de PII, hash de API Key, validação)
+são aplicadas dentro dos métodos do driver instanciado, não no factory em si.
 """

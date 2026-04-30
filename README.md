@@ -1322,13 +1322,3 @@ python tools/setup.py
 ## Licença
 
 MIT — livre para usar, modificar e distribuir.
-
----
-
-## Apoie o projeto
-
-Este projeto é open source e gratuito para sempre. Se ele te ajudou, considere apoiar o desenvolvimento.
-
-💳 PayPal: `paulooliveiraarauj@gmail.com`
-
-![QR Code](#)[PayPal]: paulooliveiraarauj@gmail.com

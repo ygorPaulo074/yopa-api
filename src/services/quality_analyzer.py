@@ -24,3 +24,11 @@ def analyze_response(agent_id: str, response_text: str):
     #cria um dicionário com os resultados da análise
     #salva o dicionário em scores.json (storage Local) ou na tabela scores (Database)
     pass
+
+def reanalyze_response(agent_id: str, score_id: str):
+    #chama get_score para obter o score existente
+    #se o score não existir, retorna None ou lança um erro
+    #recalcula sentiment_score, sentiment_label, tópicos, main_topic e intent usando textblob e spaCy
+    #atualiza o dicionário do score com os novos resultados da análise
+    #salva o dicionário atualizado em scores.json (storage Local) ou na tabela scores (Database)
+    pass
