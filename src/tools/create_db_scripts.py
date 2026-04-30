@@ -1,10 +1,9 @@
 import os
-os.makedirs("scripts", exist_ok=True)
 
 def create_sql_scripts():
     sql_script = """-- =============================================================
 -- Chatbot API — Schema SQL
--- Compatible with PostgreSQL, MySQL, SQLite
+-- PostgreSQL 14+
 -- =============================================================
 -- NOTE: This schema is designed to match the canonical JSON
 -- returned by the API. Your database must adapt to this
@@ -54,16 +53,20 @@ CREATE TABLE agent_contexts (
 
 -- -------------------------------------------------------------
 -- user_contexts
--- User profiles tracked per agent. Created on first interaction.
+-- User profiles tracked per agent. One row per (user, agent).
+-- Created on first interaction.
 -- -------------------------------------------------------------
 CREATE TABLE user_contexts (
-    user_id      VARCHAR(64)   PRIMARY KEY,
+    id           SERIAL        PRIMARY KEY,
+    user_id      VARCHAR(64)   NOT NULL,
     agent_id     VARCHAR(64)   NOT NULL REFERENCES agents(agent_id) ON DELETE CASCADE,
     created_at   TIMESTAMP     NOT NULL,
     updated_at   TIMESTAMP     NOT NULL,
     segment      VARCHAR(128),
     language     VARCHAR(16),
-    form_answers JSONB
+    form_answers JSONB,
+
+    UNIQUE (user_id, agent_id)
 );
 
 
@@ -73,7 +76,8 @@ CREATE TABLE user_contexts (
 CREATE TABLE sessions (
     session_id      VARCHAR(64)   PRIMARY KEY,
     agent_id        VARCHAR(64)   NOT NULL REFERENCES agents(agent_id) ON DELETE CASCADE,
-    user_id         VARCHAR(64)   REFERENCES user_contexts(user_id) ON DELETE SET NULL,
+    user_id         VARCHAR(64),
+    user_context_id INTEGER       REFERENCES user_contexts(id) ON DELETE SET NULL,
     model           VARCHAR(64)   NOT NULL,
     started_at      TIMESTAMP     NOT NULL,
     ended_at        TIMESTAMP,
@@ -139,11 +143,12 @@ CREATE TABLE insights (
 -- -------------------------------------------------------------
 -- Indexes
 -- -------------------------------------------------------------
-CREATE INDEX idx_agents_api_key            ON agents(api_key);
 CREATE INDEX idx_agent_contexts_agent_id   ON agent_contexts(agent_id);
 CREATE INDEX idx_user_contexts_agent_id    ON user_contexts(agent_id);
+CREATE INDEX idx_user_contexts_user_id     ON user_contexts(user_id);
 CREATE INDEX idx_sessions_agent_id         ON sessions(agent_id);
 CREATE INDEX idx_sessions_user_id          ON sessions(user_id);
+CREATE INDEX idx_sessions_user_context_id  ON sessions(user_context_id);
 CREATE INDEX idx_messages_session_id       ON messages(session_id);
 CREATE INDEX idx_scores_session_id         ON scores(session_id);
 CREATE INDEX idx_scores_message_id         ON scores(message_id);
@@ -156,7 +161,7 @@ CREATE INDEX idx_insights_session_id       ON insights(session_id);
 def create_prisma_migrate():
     prisma_migrate = """// =============================================================
 // Chatbot API — Prisma Schema
-// Compatible with PostgreSQL, MySQL, SQLite
+// PostgreSQL 14+ (change datasource provider for other DBs)
 // =============================================================
 // NOTE: This schema is designed to match the canonical JSON
 // returned by the API. Your database must adapt to this
@@ -172,7 +177,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql" // change to "mysql" or "sqlite" if needed
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -207,7 +212,7 @@ model AgentContext {
   id                Int      @id @default(autoincrement())
   agentId           String   @map("agent_id")
   version           Int      @default(1)
-  tone              String?
+  tone              Tone?
   language          String?
   segment           String?
   persona           String?
@@ -228,10 +233,12 @@ model AgentContext {
 
 // -------------------------------------------------------------
 // UserContext
-// User profiles tracked per agent. Created on first interaction.
+// User profiles tracked per agent. One row per (user, agent).
+// Created on first interaction.
 // -------------------------------------------------------------
 model UserContext {
-  userId      String   @id @map("user_id")
+  id          Int      @id @default(autoincrement())
+  userId      String   @map("user_id")
   agentId     String   @map("agent_id")
   createdAt   DateTime @map("created_at")
   updatedAt   DateTime @map("updated_at")
@@ -242,6 +249,7 @@ model UserContext {
   agent    Agent     @relation(fields: [agentId], references: [agentId], onDelete: Cascade)
   sessions Session[]
 
+  @@unique([userId, agentId])
   @@map("user_contexts")
 }
 
@@ -250,21 +258,22 @@ model UserContext {
 // Session
 // -------------------------------------------------------------
 model Session {
-  sessionId     String    @id @map("session_id")
-  agentId       String    @map("agent_id")
-  userId        String?   @map("user_id")
-  model         String
-  startedAt     DateTime  @map("started_at")
-  endedAt       DateTime? @map("ended_at")
-  totalMessages Int       @default(0) @map("total_messages")
-  inputTokens   Int       @default(0) @map("input_tokens")
-  outputTokens  Int       @default(0) @map("output_tokens")
-  totalTokens   Int       @default(0) @map("total_tokens")
-  resolved      Boolean   @default(false)
-  escalated     Boolean   @default(false)
+  sessionId       String    @id @map("session_id")
+  agentId         String    @map("agent_id")
+  userId          String?   @map("user_id")
+  userContextId   Int?      @map("user_context_id")
+  model           String
+  startedAt       DateTime  @map("started_at")
+  endedAt         DateTime? @map("ended_at")
+  totalMessages   Int       @default(0) @map("total_messages")
+  inputTokens     Int       @default(0) @map("input_tokens")
+  outputTokens    Int       @default(0) @map("output_tokens")
+  totalTokens     Int       @default(0) @map("total_tokens")
+  resolved        Boolean   @default(false)
+  escalated       Boolean   @default(false)
 
   agent       Agent        @relation(fields: [agentId], references: [agentId], onDelete: Cascade)
-  userContext UserContext?  @relation(fields: [userId], references: [userId], onDelete: SetNull)
+  userContext UserContext?  @relation(fields: [userContextId], references: [id], onDelete: SetNull)
   messages    Message[]
   scores      Score[]
   insights    Insight[]
@@ -305,6 +314,18 @@ enum Status {
   escalated
 }
 
+enum Tone {
+  formal
+  informal
+  neutro
+}
+
+enum SentimentLabel {
+  positive
+  neutral
+  negative
+}
+
 
 // -------------------------------------------------------------
 // Score
@@ -312,15 +333,15 @@ enum Status {
 // One row per message.
 // -------------------------------------------------------------
 model Score {
-  id             Int      @id @default(autoincrement())
-  sessionId      String   @map("session_id")
-  messageId      String   @unique @map("message_id")
-  sentimentScore Float?   @map("sentiment_score")
-  sentimentLabel String?  @map("sentiment_label")
-  topics         Json?    // array of detected topic strings
-  mainTopic      String?  @map("main_topic")
+  id             Int             @id @default(autoincrement())
+  sessionId      String          @map("session_id")
+  messageId      String          @unique @map("message_id")
+  sentimentScore Float?          @map("sentiment_score")
+  sentimentLabel SentimentLabel? @map("sentiment_label")
+  topics         Json?           // array of detected topic strings
+  mainTopic      String?         @map("main_topic")
   intent         String?
-  createdAt      DateTime @map("created_at")
+  createdAt      DateTime        @map("created_at")
 
   session Session @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
   message Message @relation(fields: [messageId], references: [messageId], onDelete: Cascade)

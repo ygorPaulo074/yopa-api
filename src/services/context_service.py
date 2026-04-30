@@ -12,7 +12,10 @@ class ContextService:
         self.storage = storage
 
     def save_context(self, agent_id: str, context_data: AgentContext):
-        #lista os contextos presentes
+        #conecta no banco
+        #converte o AgentContext para XML usando build_context_xml
+        #faz fetch do último contexto salvo para o agent_id
+        #se não existir contexto anterior, salva o novo contexto com versão 1
         #procura o com a versão mais alta
         #incrementa a versão do atual
         #salva o novo contexto com a versão incrementada

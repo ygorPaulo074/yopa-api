@@ -182,6 +182,8 @@ def run_setup():
                     schema_type = input("1. SQL Script\n2. Prisma Migrate\nOption: ")
 
                     if schema_type == "1":
+                        print("\n\033[1m" + "Note:" + "\033[0m" + " The SQL script uses PostgreSQL-specific syntax (SERIAL, JSONB). "
+                              "It is not compatible with MySQL or SQLite.")
                         create_sql_scripts()
                     elif schema_type == "2":
                         create_prisma_migrate()

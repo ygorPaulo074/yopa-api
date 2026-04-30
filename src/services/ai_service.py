@@ -6,14 +6,19 @@ a resposta estruturada com metadados de sessão, tokens e tempo de resposta.
 """
 from src.clients.ai_client import AIClient
 from src.infrastructure.config import settings
+from src.core.context_builder import build_context_xml
+from src.routes.base_schemas import AgentContext
 
 class AIService:
 
     def __init__(self):
         self.ai_client = AIClient()
+        self.build_context_xml = build_context_xml
 
     def read_message(self, agent_id: str, user_message: str) -> dict:
         #carrega context.xml do agente
+        context = self.load_context(agent_id)
+
         #injeta mensagem do usuário no contexto
         #chama ai_client.complete() com o contexto atualizado
         #avalia condições de escalonamento definidas no AgentContext
@@ -39,4 +44,10 @@ class AIService:
     def handle_escalation(self, agent_id: str) -> dict:
         #carrega informações de contato ou procedimentos de escalonamento do AgentContext
         #retorna informações de escalonamento estruturadas
+        pass
+
+    def load_context(self, agent_id: str) -> AgentContext:
+        #carrega o contexto XML do agente a partir do storage
+        #converte o XML para um objeto AgentContext usando uma função de parsing
+        #retorna o objeto AgentContext
         pass

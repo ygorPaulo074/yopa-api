@@ -126,6 +126,15 @@ Ao final, dois arquivos são criados na raiz do projeto:
 - `.env` — com todas as variáveis configuradas
 - `.initialized` — flag que indica que o setup foi concluído. **Não delete este arquivo manualmente** a menos que queira redefinir toda a configuração.
 
+Quando o tipo de storage selecionado for **Database**, o setup oferece a geração do schema em dois formatos, salvos em `scripts/`:
+
+| Formato | Arquivo gerado | Observação |
+|---|---|---|
+| SQL Script | `scripts/schema.sql` | **PostgreSQL 14+ apenas.** Usa `SERIAL` e `JSONB` — não compatível com MySQL ou SQLite |
+| Prisma Migrate | `scripts/schema.prisma` | Adapta os tipos automaticamente ao provider configurado no `datasource` |
+
+Após a geração, o setup pergunta se deseja criar o `docker-compose.yml`. Há duas variantes: apenas a API (banco gerenciado externamente) ou API + serviço PostgreSQL com o schema aplicado automaticamente na primeira execução.
+
 ---
 
 <a id="funcionalidades"></a>
