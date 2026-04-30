@@ -5,34 +5,46 @@ API key, modelo e timeout. Expõe interface única de completion para o ai_servi
 """
 import litellm
 from typing import cast
-from src.infrastructure.config import settings
 from pydantic import BaseModel
+from src.infrastructure.config import settings
+from src.core.schemas import HistoryMessage
+
+
+class AIUsage(BaseModel):
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
 
 
 class AIResponse(BaseModel):
     content: str
-    usage: dict
+    usage: AIUsage
 
 
 class AIClient:
 
-    def complete(self, system: str, messages: list[dict], max_tokens: int = 1024) -> AIResponse:
-        response = litellm.completion(
-            model=settings.AI_MODEL,
-            api_key=settings.AI_API_KEY,
-            messages=[{"role": "system", "content": system}, *messages],
-            max_tokens=max_tokens,
-            stream=False,
-            timeout=settings.AI_TIMEOUT,
+    def complete(self, system: str, messages: list[HistoryMessage], max_tokens: int = 1024) -> AIResponse:
+        response = cast(
+            litellm.ModelResponse,
+            litellm.completion(
+                model=settings.AI_MODEL,
+                api_key=settings.AI_API_KEY,
+                messages=[
+                    {"role": "system", "content": system},
+                    *[{"role": m.role, "content": m.content} for m in messages],
+                ],
+                max_tokens=max_tokens,
+                stream=False,
+                timeout=settings.AI_TIMEOUT,
+            ),
         )
-        usage = getattr(response, "usage", None)
+        raw_usage = getattr(response, "usage", None)
 
-        response = cast(litellm.ModelResponse, response)
         return AIResponse(
             content=response.choices[0].message.content or "",
-            usage={
-            "input": usage.prompt_tokens if usage else 0,
-            "output": usage.completion_tokens if usage else 0,
-            "total": usage.total_tokens if usage else 0,
-            },
+            usage=AIUsage(
+                input_tokens=raw_usage.prompt_tokens if raw_usage else 0,
+                output_tokens=raw_usage.completion_tokens if raw_usage else 0,
+                total_tokens=raw_usage.total_tokens if raw_usage else 0,
+            ),
         )
