@@ -27,6 +27,13 @@ presidio-anonymizer
 # Extração de texto de arquivos
 pdfplumber
 
+# Banco de dados
+sqlalchemy
+psycopg2-binary
+
+# HTTP (webhook driver)
+requests
+
 # Logs
 loguru
 

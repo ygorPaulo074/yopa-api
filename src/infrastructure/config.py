@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     REDIS_URL: str = "redis://localhost:6379"
     SESSION_TTL: int = 86400
+    STORAGE_TYPE: str = "local"
+    DATABASE_URL: str = ""
+    WEBHOOK_URL: str = ""
 
     class Config:
         env_file = ".env"

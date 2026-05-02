@@ -1,9 +1,28 @@
 """
 Resolve e instancia o driver de persistência correto com base no STORAGE_TYPE do .env.
-Valores válidos: 'Local', 'Database', 'Webhook'.
-Usado pelos services para obter o driver sem depender de um concreto —
-toda a troca de storage ocorre aqui, sem tocar na lógica de negócio.
-
-As operações de segurança (sanitização de PII, hash de API Key, validação)
-são aplicadas dentro dos métodos do driver instanciado, não no factory em si.
+Valores válidos: 'local', 'database', 'webhook'.
 """
+
+from src.infrastructure.config import settings
+from src.core.persistence.base import PersistenceDriver
+
+
+def get_driver() -> PersistenceDriver:
+    storage_type = settings.STORAGE_TYPE.lower()
+
+    if storage_type == "local":
+        from src.core.persistence.drivers.local import LocalDriver
+        return LocalDriver()
+
+    if storage_type == "database":
+        from src.core.persistence.drivers.database import DatabaseDriver
+        return DatabaseDriver()
+
+    if storage_type == "webhook":
+        from src.core.persistence.drivers.webhook import WebhookDriver
+        return WebhookDriver()
+
+    raise ValueError(
+        f"STORAGE_TYPE inválido: '{settings.STORAGE_TYPE}'. "
+        "Valores aceitos: 'local', 'database', 'webhook'."
+    )

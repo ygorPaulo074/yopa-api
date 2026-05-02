@@ -8,13 +8,11 @@ app = FastAPI()
 
 app.state.limiter = LIMITER
 
-
 async def rate_limit_handler(request: Request, exc: Exception) -> JSONResponse:
     return JSONResponse(
         status_code=429,
         content={"error": "rate_limit_exceeded", "message": "Too many requests."}
     )
-
 
 app.add_exception_handler(RateLimitExceeded, rate_limit_handler)
 

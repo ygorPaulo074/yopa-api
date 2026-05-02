@@ -246,9 +246,9 @@ def run_setup():
 
     print(f"\n\033[1m" + "FINALIZING CONFIGURATION..." + "\033[0m")
     with open(".env", "w") as f:
-        f.write(f"IA_API_KEY={api_key}\n")
+        f.write(f"AI_API_KEY={api_key}\n")
         f.write(f"AI_TIMEOUT={timeout}\n")
-        f.write(f"MODEL={model}\n")
+        f.write(f"AI_MODEL={model}\n")
         f.write(f"RUN_MODE={run_mode}\n")
         f.write(f"PORT={port}\n")
         f.write(f"STORAGE_TYPE={storage_type}\n")

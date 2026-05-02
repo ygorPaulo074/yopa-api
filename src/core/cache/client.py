@@ -4,8 +4,7 @@ Centralizes access to agent context, session history, NLP scores and session
 metadata. Agent context has no fixed TTL — it is invalidated explicitly on
 PUT /agent/context. Sessions use a configurable TTL renewed on each message.
 """
-import urllib.parse
-from redis.client import Redis
+from redis import Redis
 from redis.exceptions import RedisError
 from src.infrastructure.config import settings
 from src.core.schemas import HistoryMessage, SessionMeta, ScoreData
@@ -15,14 +14,7 @@ from . import keys
 class CacheClient:
 
     def __init__(self):
-        parsed = urllib.parse.urlparse(settings.REDIS_URL)
-        self._redis = Redis(
-            host=parsed.hostname or "localhost",
-            port=parsed.port or 6379,
-            db=int(parsed.path.lstrip("/") or "0"),
-            password=parsed.password,
-            decode_responses=True,
-        )
+        self._redis = Redis.from_url(settings.REDIS_URL, decode_responses=True)
 
     def ping(self) -> bool:
         try:

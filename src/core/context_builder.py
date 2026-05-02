@@ -1,8 +1,7 @@
 """
-Transforma o AgentContext (Pydantic) em um prompt XML estruturado.
-Executado no POST /agent (criação) e no PUT /agent/context (atualização).
-O XML gerado é persistido em context.xml e injetado como system prompt
-em cada chamada do POST /chat via ai_service.
+Transforma o AgentContext (Pydantic) em XML estruturado para uso como system prompt.
+Chamado no POST /agent e no PUT /agent/context. O resultado é cacheado no Redis
+e injetado em cada chamada ao modelo via ai_service.
 """
 import xml.etree.ElementTree as ET
 from src.routes.base_schemas import AgentContext
@@ -25,6 +24,6 @@ def dict_to_xml(parent: ET.Element, data: dict):
 
 def build_context_xml(context: AgentContext) -> str:
     root = ET.Element("AgentContext")
-    dict_to_xml(root, context.dict(exclude_none=True))
+    dict_to_xml(root, context.model_dump(exclude_none=True))
     ET.indent(root)
-    return ET.tostring(root, encoding="unicode", xml_declaration=True, method="xml")
+    return ET.tostring(root, encoding="unicode", method="xml")
