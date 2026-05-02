@@ -3,6 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from src.infrastructure.config import settings, LIMITER
+from src.routes.agent.index import router as agent_router
+from src.routes.chat.index import router as chat_router
+from src.routes.data.index import router as data_router
 
 app = FastAPI()
 
@@ -23,3 +26,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(agent_router)
+app.include_router(chat_router)
+app.include_router(data_router)

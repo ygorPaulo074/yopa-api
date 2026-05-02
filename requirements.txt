@@ -48,3 +48,4 @@ loguru
 pytest
 httpx
 invoke
+fakeredis

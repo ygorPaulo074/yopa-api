@@ -3,13 +3,14 @@ Gerencia o ciclo de vida dos agentes.
 Depende de PersistenceDriver (via factory) para storage,
 CacheClient para invalidação de contexto e ContextService para versionamento.
 """
+import secrets
 import uuid
 from datetime import datetime, timezone
 
 from src.core.persistence.factory import get_driver
 from src.core.persistence.base import PersistenceDriver
 from src.core.cache.client import CacheClient
-from src.core.security import generate_api_key, hash_api_key
+from src.core.security import hash_api_key
 from src.core.schemas import AgentRecord, SessionRecord
 from src.routes.base_schemas import AgentContext
 from src.services.context_service import ContextService
@@ -24,20 +25,21 @@ class AgentService:
 
     def create_agent(self, name: str, owner: str, context: AgentContext) -> dict:
         agent_id = str(uuid.uuid4())
-        raw_key = generate_api_key()
+        secret = secrets.token_urlsafe(32)
+        raw_key = f"{agent_id}.{secret}"
         now = datetime.now(timezone.utc).isoformat()
         record = AgentRecord(
             agent_id=agent_id,
             name=name,
             owner=owner,
-            api_key_hash=hash_api_key(raw_key),
+            api_key_hash=hash_api_key(secret),
             tags=context.tags,
             created_at=now,
             updated_at=now,
         )
         self.driver.save_agent(record)
         self.context_service.create_context(agent_id, context)
-        return {"agent_id": agent_id, "api_key": raw_key}
+        return {"agent_id": agent_id, "api_key": raw_key, "created_at": now}
 
     def get_agent(self, agent_id: str) -> AgentRecord | None:
         return self.driver.load_agent(agent_id)
