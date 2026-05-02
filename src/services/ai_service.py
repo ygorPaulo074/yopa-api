@@ -1,53 +1,183 @@
 """
-Orquestra as chamadas ao modelo de IA.
-Recebe a mensagem do usuário, carrega o context.xml do agente, injeta via ai_client,
-avalia as condições de escalonamento definidas no AgentContext e retorna
-a resposta estruturada com metadados de sessão, tokens e tempo de resposta.
+Orquestra chamadas ao modelo de IA no ciclo do POST /chat.
+Carrega contexto do cache via ContextService, mantém histórico no Redis,
+chama AIClient e avalia condições de escalonamento do AgentContext.
 """
+import uuid
+import time
+from datetime import datetime, timezone
+
 from src.clients.ai_client import AIClient
+from src.core.cache.client import CacheClient
+from src.core.schemas import HistoryMessage, SessionMeta
 from src.infrastructure.config import settings
-from src.core.context_builder import build_context_xml
-from src.routes.base_schemas import AgentContext
+from src.services.context_service import ContextService
+from src.services import quality_analyzer
+
 
 class AIService:
 
     def __init__(self):
         self.ai_client = AIClient()
-        self.build_context_xml = build_context_xml
+        self.cache = CacheClient()
+        self.context_service = ContextService()
 
-    def read_message(self, agent_id: str, user_message: str) -> dict:
-        #carrega context.xml do agente
-        context = self.load_context(agent_id)
+    def process_message(
+        self,
+        agent_id: str,
+        session_id: str,
+        user_id: str | None,
+        message: str,
+    ) -> dict:
+        context_xml = self.context_service.load_context_xml(agent_id) or ""
+        history = self.cache.get_history(session_id)
 
-        #injeta mensagem do usuário no contexto
-        #chama ai_client.complete() com o contexto atualizado
-        #avalia condições de escalonamento definidas no AgentContext
-        #retorna resposta estruturada com metadados de sessão, tokens e tempo de resposta
-        pass
+        now = datetime.now(timezone.utc).isoformat()
+        user_msg_id = str(uuid.uuid4())
+        user_msg = HistoryMessage(
+            message_id=user_msg_id,
+            session_id=session_id,
+            role="user",
+            content=message,
+            timestamp=now,
+            status="delivered",
+        )
+        self.cache.append_message(session_id, user_msg)
 
-    def evaluate_escalation(self, agent_id: str, ai_response: dict) -> bool:
-        #carrega condições de escalonamento do AgentContext
-        #avalia se a resposta do modelo atende a alguma condição de escalonamento
-        #retorna True se deve escalar, False caso contrário
-        pass
+        threshold = self._sentiment_threshold(agent_id)
+        user_score = quality_analyzer.analyze(user_msg_id, "user", message, threshold)
 
-    def get_response_metadata(self, ai_response: dict) -> dict:
-        #extrai metadados relevantes da resposta do modelo (ex: tokens usados, tempo de resposta, etc)
-        #retorna dicionário com os metadados
-        pass
+        t0 = time.monotonic()
+        ai_response = self.ai_client.complete(system=context_xml, messages=history + [user_msg])
+        response_time_ms = int((time.monotonic() - t0) * 1000)
 
-    def handle_fallback(self, agent_id: str) -> dict:
-        #carrega mensagem de fallback do AgentContext
-        #retorna mensagem de fallback estruturada
-        pass
+        reply_now = datetime.now(timezone.utc).isoformat()
+        assistant_msg_id = str(uuid.uuid4())
+        assistant_msg = HistoryMessage(
+            message_id=assistant_msg_id,
+            session_id=session_id,
+            role="assistant",
+            content=ai_response.content,
+            timestamp=reply_now,
+            status="delivered",
+            tokens=ai_response.usage.output_tokens,
+            response_time_ms=response_time_ms,
+        )
+        self.cache.append_message(session_id, assistant_msg)
 
-    def handle_escalation(self, agent_id: str) -> dict:
-        #carrega informações de contato ou procedimentos de escalonamento do AgentContext
-        #retorna informações de escalonamento estruturadas
-        pass
+        assistant_score = quality_analyzer.analyze(
+            assistant_msg_id, "assistant", ai_response.content, threshold
+        )
+        existing_scores = self.cache.get_scores(session_id)
+        scores = quality_analyzer.update_session_scores(
+            session_id, existing_scores, user_score, now, threshold
+        )
+        scores = quality_analyzer.update_session_scores(
+            session_id, scores, assistant_score, reply_now, threshold
+        )
+        self.cache.set_scores(session_id, scores)
 
-    def load_context(self, agent_id: str) -> AgentContext:
-        #carrega o contexto XML do agente a partir do storage
-        #converte o XML para um objeto AgentContext usando uma função de parsing
-        #retorna o objeto AgentContext
-        pass
+        meta = self.cache.get_session_meta(session_id)
+        if meta is None:
+            meta = SessionMeta(
+                session_id=session_id,
+                agent_id=agent_id,
+                user_id=user_id,
+                model=settings.AI_MODEL,
+                started_at=now,
+            )
+        meta = meta.model_copy(update={
+            "total_messages": meta.total_messages + 2,
+            "input_tokens": meta.input_tokens + ai_response.usage.input_tokens,
+            "output_tokens": meta.output_tokens + ai_response.usage.output_tokens,
+            "total_tokens": meta.total_tokens + ai_response.usage.total_tokens,
+        })
+        self.cache.set_session_meta(session_id, meta)
+
+        return {
+            "message_id": assistant_msg_id,
+            "content": ai_response.content,
+            "usage": ai_response.usage.model_dump(),
+            "response_time_ms": response_time_ms,
+        }
+
+    def evaluate_escalation(self, agent_id: str, session_id: str) -> bool:
+        record = self.context_service.load_context(agent_id)
+        if not record or not record.context.escalation_trigger:
+            return False
+
+        trigger = record.context.escalation_trigger
+        history = self.cache.get_history(session_id)
+        scores = self.cache.get_scores(session_id)
+        meta = self.cache.get_session_meta(session_id)
+
+        results = [
+            self._eval_condition(cond, history, scores, meta)
+            for cond in trigger.conditions
+        ]
+
+        if trigger.operator == "OR":
+            return any(results)
+        return all(results)
+
+    def get_fallback_message(self, agent_id: str) -> str | None:
+        record = self.context_service.load_context(agent_id)
+        if not record:
+            return None
+        return record.context.fallback_message
+
+    # ── Internal helpers ───────────────────────────────────────────────────────
+
+    def _sentiment_threshold(self, agent_id: str) -> float:
+        record = self.context_service.load_context(agent_id)
+        if not record or not record.context.escalation_trigger:
+            return 0.3
+        for cond in record.context.escalation_trigger.conditions:
+            if cond.type == "sentiment" and cond.threshold is not None:
+                return cond.threshold
+        return 0.3
+
+    def _eval_condition(
+        self,
+        cond,
+        history: list[HistoryMessage],
+        scores,
+        meta: SessionMeta | None,
+    ) -> bool:
+        user_messages = [m for m in history if m.role == "user"]
+
+        if cond.type == "keyword":
+            keywords = cond.values or ([cond.value] if cond.value else [])
+            if not user_messages or not keywords:
+                return False
+            last = user_messages[-1].content.lower()
+            return any(str(kw).lower() in last for kw in keywords)
+
+        if cond.type == "sentiment":
+            if not scores or scores.avg_sentiment_score is None:
+                return False
+            threshold = cond.threshold if cond.threshold is not None else 0.3
+            return scores.avg_sentiment_score < -threshold
+
+        if cond.type == "message_count":
+            return len(user_messages) >= int(cond.value or 0)
+
+        if cond.type == "topic":
+            topics = cond.values or ([cond.value] if cond.value else [])
+            if not scores or not topics:
+                return False
+            return any(t in (scores.all_topics or []) for t in topics)
+
+        if cond.type == "time_elapsed":
+            if not meta or cond.value is None:
+                return False
+            started = datetime.fromisoformat(meta.started_at)
+            elapsed = (datetime.now(timezone.utc) - started).total_seconds()
+            return elapsed >= float(cond.value)
+
+        if cond.type == "intent":
+            if not scores or not cond.value:
+                return False
+            return scores.intent == cond.value
+
+        return False

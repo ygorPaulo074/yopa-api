@@ -4,9 +4,49 @@ Usados por drivers, CacheClient e services — nunca expostos diretamente pela A
 Os schemas de rota (src/routes/*/schemas.py) são derivados destes ao montar respostas.
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, HttpUrl
 from typing import Any, Dict, List, Literal, Optional
-from src.routes.base_schemas import AgentContextBase
+
+
+# ── Agent context base (compartilhado entre core e routes) ────────────────────
+
+class FileReference(BaseModel):
+    name: str
+    url: HttpUrl
+
+
+class RestrictionsConfig(BaseModel):
+    topics: List[str] = []
+    files: List[FileReference] = []
+
+
+class KnowledgeBaseConfig(BaseModel):
+    urls: List[HttpUrl] = []
+    files: List[FileReference] = []
+
+
+class EscalationCondition(BaseModel):
+    type: Literal["keyword", "sentiment", "message_count", "topic", "time_elapsed", "intent"]
+    value: Optional[str | int | float] = None
+    values: Optional[List[str]] = None
+    threshold: Optional[float] = None
+
+
+class EscalationTrigger(BaseModel):
+    operator: Literal["OR", "AND"]
+    conditions: List[EscalationCondition]
+
+
+class AgentContextBase(BaseModel):
+    tone: Optional[Literal["formal", "informal", "neutro"]] = None
+    language: Optional[str] = None
+    segment: Optional[str] = None
+    persona: Optional[str] = None
+    behavior: Optional[str] = None
+    fallback_message: Optional[str] = None
+    restrictions: Optional[RestrictionsConfig] = None
+    knowledge_base: Optional[KnowledgeBaseConfig] = None
+    escalation_trigger: Optional[EscalationTrigger] = None
 
 
 # ── Cache: session history ────────────────────────────────────────────────────
@@ -39,17 +79,28 @@ class SessionMeta(BaseModel):
     escalated: bool = False
 
 
-# ── Cache: NLP scores (per message) ──────────────────────────────────────────
+# ── Cache: NLP scores ─────────────────────────────────────────────────────────
 
-class ScoreData(BaseModel):
-    session_id: str
+class MessageScore(BaseModel):
     message_id: str
+    role: Literal["user", "assistant"]
+    text_length: Optional[int] = None
     sentiment_score: Optional[float] = None
     sentiment_label: Optional[Literal["positive", "neutral", "negative"]] = None
     topics: Optional[List[str]] = None
+    intent: Optional[str] = None
+
+
+class ScoreData(BaseModel):
+    session_id: str
+    messages: List[MessageScore] = []
+    avg_sentiment_score: Optional[float] = None
+    sentiment_label: Optional[Literal["positive", "neutral", "negative"]] = None
+    all_topics: List[str] = []
     main_topic: Optional[str] = None
     intent: Optional[str] = None
-    created_at: str
+    avg_user_message_length: Optional[float] = None
+    updated_at: str
 
 
 # ── Persistence: agent ────────────────────────────────────────────────────────

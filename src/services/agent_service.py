@@ -1,63 +1,72 @@
 """
-Gerencia o ciclo de vida dos agentes: criação, leitura, atualização de metadados e deleção.
-Responsável por gerar o agent_id e a API Key, persistir os dados do agente no storage
-configurado (Local, Database ou Webhook) e atualizar timestamps de atividade.
+Gerencia o ciclo de vida dos agentes.
+Depende de PersistenceDriver (via factory) para storage,
+CacheClient para invalidação de contexto e ContextService para versionamento.
 """
-from src.clients.ai_client import AIClient
-from src.infrastructure.config import settings
+import secrets
+import uuid
+from datetime import datetime, timezone
+
+from src.core.persistence.factory import get_driver
+from src.core.persistence.base import PersistenceDriver
+from src.core.cache.client import CacheClient
+from src.core.security import hash_api_key
+from src.core.schemas import AgentRecord, SessionRecord
+from src.routes.base_schemas import AgentContext
+from src.services.context_service import ContextService
+
 
 class AgentService:
 
     def __init__(self):
-        self.ai_client = AIClient()
+        self.driver: PersistenceDriver = get_driver()
+        self.cache = CacheClient()
+        self.context_service = ContextService()
 
-    def create_agent(self, name: str, description: str) -> dict:
-        #cria nome
-        #cria id
-        #chama context builder
-        #chama api key generator
-        #define fallback message
-        #carrega knowledge base
-        #atribue tags
-        #carrega escalation triggers
-        #persiste no storage
-        #retorna dados do agente criado
-        #return agent_data
-        pass
+    def create_agent(self, name: str, owner: str, context: AgentContext) -> dict:
+        agent_id = str(uuid.uuid4())
+        secret = secrets.token_urlsafe(32)
+        raw_key = f"{agent_id}.{secret}"
+        now = datetime.now(timezone.utc).isoformat()
+        record = AgentRecord(
+            agent_id=agent_id,
+            name=name,
+            owner=owner,
+            api_key_hash=hash_api_key(secret),
+            tags=context.tags,
+            created_at=now,
+            updated_at=now,
+        )
+        self.driver.save_agent(record)
+        self.context_service.create_context(agent_id, context)
+        return {"agent_id": agent_id, "api_key": raw_key, "created_at": now}
 
-    def get_agent(self, agent_id: str) -> dict:
-        #busca agente no storage pelo agent_id
-        #retorna dados do agente
-        #return agent_data
-        pass
+    def get_agent(self, agent_id: str) -> AgentRecord | None:
+        return self.driver.load_agent(agent_id)
 
-    def update_agent(self, agent_id: str, updates: dict) -> dict:
-        #busca agente no storage pelo agent_id
-        #recebe campos a atualizar (name, description, tags, etc)
-        #atualiza campos permitidos (name, description, tags, etc)
-        #atualiza timestamp de modificação
-        #fixa quem atualizou (sistema, usuário, etc)
-        #atualiza contexto se necessário (ex: mudança de tags pode alterar o contexto)
-        #atualiza knowledge base se necessário (ex: mudança de descrição pode alterar a base de conhecimento)
-        #atualiza triggers de escalonamento se necessário (ex: mudança de descrição pode alterar os gatilhos)
-        #atualiza fallback message se necessário (ex: mudança de descrição pode alterar a mensagem de fallback)
-        #persiste mudanças no storage
-        #retorna dados do agente atualizado
-        #return updated_agent_data
-        pass
+    def get_metrics(self, agent_id: str) -> dict:
+        sessions: list[SessionRecord] = self.driver.list_sessions(agent_id)
+        total = len(sessions)
+        if total == 0:
+            return {
+                "total_sessions": 0,
+                "total_messages": 0,
+                "total_tokens": 0,
+                "resolution_rate": 0.0,
+                "escalation_rate": 0.0,
+            }
+        total_messages = sum(s.total_messages for s in sessions)
+        total_tokens = sum(s.total_tokens for s in sessions)
+        resolved = sum(1 for s in sessions if s.resolved)
+        escalated = sum(1 for s in sessions if s.escalated)
+        return {
+            "total_sessions": total,
+            "total_messages": total_messages,
+            "total_tokens": total_tokens,
+            "resolution_rate": round(resolved / total, 4),
+            "escalation_rate": round(escalated / total, 4),
+        }
 
-    def delete_agent(self, agent_id: str) -> bool:
-        #busca agente no storage pelo agent_id
-        #deleta agente do storage
-        #retorna sucesso ou falha da operação
-        #return success
-        pass
-
-    def list_agents(self) -> list[dict]:
-        #busca todos os agentes no storage
-        #retorna lista de agentes com dados básicos (agent_id, name, description, tags, etc)
-        #return agents_list
-        pass
-
-
-    
+    def delete_agent(self, agent_id: str) -> None:
+        self.driver.delete_agent(agent_id)
+        self.cache.invalidate_context(agent_id)

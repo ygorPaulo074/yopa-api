@@ -1,34 +1,201 @@
 """
-Análise local de qualidade pós-resposta, sem consumo de tokens.
-Usa textblob para calcular sentiment_score e sentiment_label por mensagem.
-Usa spaCy para detectar tópicos, main_topic e intent da conversa.
-Executado automaticamente após cada resposta do POST /chat e persiste
-os resultados em scores.json (storage Local) ou na tabela scores (Database).
+Análise local de qualidade por mensagem, sem consumo de tokens.
+Usa pyspellchecker para correção ortográfica antes da análise.
+Usa argostranslate para traduzir para inglês quando necessário.
+Usa textblob para sentiment_score e sentiment_label.
+Usa spaCy (en_core_web_sm) para extração de tópicos (noun chunks) e intent (verbo + objeto).
+Usa TF-IDF (scikit-learn) para calcular main_topic na sessão.
+Chamado após cada mensagem do POST /chat — o resultado é acumulado no ScoreData
+da sessão via update_session_scores e salvo no Redis pelo ai_service.
 """
+from __future__ import annotations
 
-def list_scores(agent_id: str):
-    #conecta no banco
-    #faz fetch de todos os scores do agent_id
-    #retorna a lista de scores em formato JSON
-    pass
+from collections import Counter
+from typing import Literal
 
-def get_score(agent_id: str, score_id: str):
-    #chama list_scores para obter a lista de scores
-    #procura o score pesquisado pelo score_id
-    #retorna o score encontrado ou None se não encontrado
-    pass
+from langdetect import detect, LangDetectException
+from spellchecker import SpellChecker
+from textblob import TextBlob
+from sklearn.feature_extraction.text import TfidfVectorizer
 
-def analyze_response(agent_id: str, response_text: str):
-    #calcula sentiment_score e sentiment_label usando textblob
-    #detecta tópicos, main_topic e intent usando spaCy
-    #cria um dicionário com os resultados da análise
-    #salva o dicionário em scores.json (storage Local) ou na tabela scores (Database)
-    pass
+from src.core.schemas import MessageScore, ScoreData
+from src.infrastructure.config import settings
 
-def reanalyze_response(agent_id: str, score_id: str):
-    #chama get_score para obter o score existente
-    #se o score não existir, retorna None ou lança um erro
-    #recalcula sentiment_score, sentiment_label, tópicos, main_topic e intent usando textblob e spaCy
-    #atualiza o dicionário do score com os novos resultados da análise
-    #salva o dicionário atualizado em scores.json (storage Local) ou na tabela scores (Database)
-    pass
+
+# ── Singletons ─────────────────────────────────────────────────────────────────
+
+_nlp = None
+_spell_checkers: dict[str, SpellChecker] = {}
+_SPELL_SUPPORTED = {"pt", "en", "es", "fr", "de", "it", "ru"}
+
+
+def _get_nlp():
+    global _nlp
+    if _nlp is None:
+        import spacy
+        _nlp = spacy.load("en_core_web_sm")
+    return _nlp
+
+
+def _get_spell_checker(lang: str) -> SpellChecker | None:
+    if lang not in _SPELL_SUPPORTED:
+        return None
+    if lang not in _spell_checkers:
+        _spell_checkers[lang] = SpellChecker(language=lang)
+    return _spell_checkers[lang]
+
+
+# ── Helpers internos ───────────────────────────────────────────────────────────
+
+def _detect_language(text: str) -> str:
+    try:
+        return detect(text)
+    except LangDetectException:
+        return "en"
+
+
+def _correct_spelling(text: str, lang: str) -> str:
+    spell = _get_spell_checker(lang)
+    if not spell:
+        return text
+    words = text.split()
+    return " ".join(spell.correction(w) or w for w in words)
+
+
+def _translate_to_english(text: str, from_lang: str) -> str:
+    if from_lang == "en":
+        return text
+    if from_lang not in settings.ANALYZER_LANGUAGES:
+        return text
+    try:
+        from argostranslate import translate
+        installed = translate.get_installed_languages()
+        src = next((l for l in installed if l.code == from_lang), None)
+        tgt = next((l for l in installed if l.code == "en"), None)
+        if not src or not tgt:
+            return text
+        return src.get_translation(tgt).translate(text)
+    except Exception:
+        return text
+
+
+def _classify_sentiment(
+    score: float, threshold: float
+) -> Literal["positive", "neutral", "negative"]:
+    if score < -threshold:
+        return "negative"
+    if score > threshold:
+        return "positive"
+    return "neutral"
+
+
+def _extract_topics(text: str) -> list[str]:
+    doc = _get_nlp()(text)
+    topics = set()
+    for chunk in doc.noun_chunks:
+        # mínimo 2 tokens e raiz não é stopword
+        if len(chunk) >= 2 and not chunk.root.is_stop:
+            topics.add(chunk.text.lower().strip())
+    return list(topics)
+
+
+def _extract_intent(text: str) -> str | None:
+    doc = _get_nlp()(text)
+    for token in doc:
+        if token.pos_ == "VERB" and not token.is_stop:
+            # tenta verbo + objeto direto
+            for child in token.children:
+                if child.dep_ == "dobj":
+                    return f"{token.lemma_} {child.text}".lower()
+    # fallback: só o verbo principal
+    for token in doc:
+        if token.pos_ == "VERB" and not token.is_stop:
+            return token.lemma_.lower()
+    return None
+
+
+def _compute_main_topic(messages: list[MessageScore]) -> str | None:
+    # cada mensagem com tópicos vira um "documento" para o TF-IDF
+    documents = [" ".join(m.topics) for m in messages if m.topics]
+    if not documents:
+        return None
+    if len(documents) == 1:
+        return documents[0]
+    try:
+        vectorizer = TfidfVectorizer()
+        matrix = vectorizer.fit_transform(documents)
+        scores = matrix.sum(axis=0).A1
+        feature_names = vectorizer.get_feature_names_out()
+        return feature_names[scores.argmax()]
+    except Exception:
+        # fallback: palavra mais frequente entre todos os tópicos
+        words = [w for doc in documents for w in doc.split()]
+        return Counter(words).most_common(1)[0][0] if words else None
+
+
+# ── API pública ────────────────────────────────────────────────────────────────
+
+def analyze(
+    message_id: str,
+    role: Literal["user", "assistant"],
+    text: str,
+    sentiment_threshold: float = 0.3,
+) -> MessageScore:
+    lang = _detect_language(text)
+    corrected = _correct_spelling(text, lang)
+    english = _translate_to_english(corrected, lang)
+
+    score = round(TextBlob(english).sentiment.polarity, 4)
+    label = _classify_sentiment(score, sentiment_threshold)
+    topics = _extract_topics(english) or None
+    intent = _extract_intent(english)
+
+    return MessageScore(
+        message_id=message_id,
+        role=role,
+        text_length=len(text),
+        sentiment_score=score,
+        sentiment_label=label,
+        topics=topics,
+        intent=intent,
+    )
+
+
+def update_session_scores(
+    session_id: str,
+    existing: ScoreData | None,
+    new_message: MessageScore,
+    updated_at: str,
+    sentiment_threshold: float = 0.3,
+) -> ScoreData:
+    messages = (existing.messages if existing else []) + [new_message]
+    user_messages = [m for m in messages if m.role == "user"]
+
+    # sentiment médio (somente mensagens do usuário)
+    scores = [m.sentiment_score for m in user_messages if m.sentiment_score is not None]
+    avg_score = round(sum(scores) / len(scores), 4) if scores else None
+    avg_label = _classify_sentiment(avg_score, sentiment_threshold) if avg_score is not None else None
+
+    # tópicos acumulados e main_topic via TF-IDF
+    all_topics = list({t for m in messages for t in (m.topics or [])})
+    main_topic = _compute_main_topic(messages)
+
+    # intent mais frequente entre mensagens do usuário
+    intents = [m.intent for m in user_messages if m.intent]
+    intent = Counter(intents).most_common(1)[0][0] if intents else None
+
+    # comprimento médio das mensagens do usuário
+    lengths = [m.text_length for m in user_messages if m.text_length is not None]
+    avg_len = round(sum(lengths) / len(lengths), 1) if lengths else None
+
+    return ScoreData(
+        session_id=session_id,
+        messages=messages,
+        avg_sentiment_score=avg_score,
+        sentiment_label=avg_label,
+        all_topics=all_topics,
+        main_topic=main_topic,
+        intent=intent,
+        avg_user_message_length=avg_len,
+        updated_at=updated_at,
+    )

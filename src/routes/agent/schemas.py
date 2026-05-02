@@ -1,10 +1,12 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Optional, List
-from ..base_schemas import AgentContext, AgentContextBase
+from src.core.schemas import AgentContextBase
+from ..base_schemas import AgentContext
 
 
 class AgentCreateRequest(BaseModel):
-    name: str 
+    name: str
+    owner: str
     context: AgentContext
 
 
@@ -45,7 +47,7 @@ class AgentMetricsResponse(BaseModel):
     agent_id: str
     total_sessions: int
     total_messages: int
-    avg_response_time_ms: float
+    total_tokens: int
     resolution_rate: float
     escalation_rate: float
     active_since: Optional[str] = None

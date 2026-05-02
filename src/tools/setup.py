@@ -1,3 +1,4 @@
+import json
 import litellm
 import redis as redis_lib
 import re
@@ -11,6 +12,16 @@ from src.tools.create_db_scripts import (
     create_docker_compose_with_db
 )
 from typing import List
+
+ANALYZER_LANGUAGE_OPTIONS = {
+    "1": ("pt", "Portuguese"),
+    "2": ("es", "Spanish"),
+    "3": ("fr", "French"),
+    "4": ("de", "German"),
+    "5": ("it", "Italian"),
+    "6": ("ja", "Japanese"),
+    "7": ("zh", "Chinese"),
+}
 
 PROVIDER_OPTIONS = {
     "1": "claude-sonnet-4",
@@ -80,7 +91,7 @@ def get_allowed_origins() -> str:
         origins = [HttpUrl(o.strip()) for o in raw.split(",")]
         try:
             CORSConfig(allowed_origins=origins)
-            return ",".join(str(origin) for origin in origins)
+            return json.dumps([str(origin) for origin in origins])
         except ValidationError:
             print("Invalid URL detected. Please enter valid URLs (ex: https://your-website.com).")
 
@@ -241,7 +252,43 @@ def run_setup():
             break
         print("\033[1m" + "Error:" + "\033[0m" + " Enter a valid number.")
 
-    print(f"\n\033[1m" + "STEP 7: CORS CONFIGURATION" + "\033[0m")
+    print(f"\n\033[1m" + "STEP 7: ANALYZER LANGUAGES" + "\033[0m")
+    print("Select the languages your chatbot will receive (English is always included).")
+    print("The corresponding translation packages will be downloaded now (~80MB each).")
+    print("Available languages:")
+    for key, (code, name) in ANALYZER_LANGUAGE_OPTIONS.items():
+        print(f"  {key}. {name} ({code})")
+    print("  Enter the numbers separated by commas, or press Enter to skip.")
+    analyzer_languages = ["en"]
+    while True:
+        raw = input("Languages [default: none]: ").strip()
+        if not raw:
+            break
+        selections = [s.strip() for s in raw.split(",")]
+        invalid = [s for s in selections if s not in ANALYZER_LANGUAGE_OPTIONS]
+        if invalid:
+            print(f"\033[1m" + "Error:" + "\033[0m" + f" Invalid options: {', '.join(invalid)}. Try again.")
+            continue
+        selected_codes = [ANALYZER_LANGUAGE_OPTIONS[s][0] for s in selections]
+        analyzer_languages += selected_codes
+        print(f"\nDownloading translation packages: {', '.join(selected_codes)} → en")
+        try:
+            from argostranslate import package as argo_package
+            argo_package.update_package_index()
+            available = argo_package.get_available_packages()
+            for code in selected_codes:
+                pkg = next((p for p in available if p.from_code == code and p.to_code == "en"), None)
+                if pkg:
+                    argo_package.install_from_path(pkg.download())
+                    print(f"  ✓ {code} → en installed.")
+                else:
+                    print(f"  ✗ Package {code} → en not found. Skipping.")
+        except Exception as e:
+            print(f"\033[1m" + "Warning:" + "\033[0m" + f" Could not download packages: {e}")
+            print("You can install them manually later via argostranslate.")
+        break
+
+    print(f"\n\033[1m" + "STEP 8: CORS CONFIGURATION" + "\033[0m")
     allowed_origins = get_allowed_origins()
 
     print(f"\n\033[1m" + "FINALIZING CONFIGURATION..." + "\033[0m")
@@ -264,6 +311,7 @@ def run_setup():
         f.write(f"REDIS_URL={redis_url}\n")
         f.write(f"SESSION_TTL={session_ttl}\n")
         f.write(f"ALLOWED_ORIGINS={allowed_origins}\n")
+        f.write(f"ANALYZER_LANGUAGES={json.dumps(analyzer_languages)}\n")
 
     raise_initialization_flag()
     print("\n\033[1m" + "Configuration completed successfully!" + "\033[0m" + " .env file generated.\n")

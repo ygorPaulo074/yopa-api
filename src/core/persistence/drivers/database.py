@@ -224,19 +224,26 @@ class DatabaseDriver(PersistenceDriver):
         with self._engine.begin() as conn:
             conn.execute(text("""
                 INSERT INTO scores
-                    (session_id, agent_id, message_id, sentiment_score, sentiment_label,
-                     topics, main_topic, intent, created_at)
+                    (session_id, agent_id, messages, avg_sentiment_score, sentiment_label,
+                     all_topics, main_topic, intent, avg_user_message_length, updated_at)
                 VALUES
-                    (:session_id, :agent_id, :message_id, :sentiment_score, :sentiment_label,
-                     :topics, :main_topic, :intent, :created_at)
+                    (:session_id, :agent_id, :messages, :avg_sentiment_score, :sentiment_label,
+                     :all_topics, :main_topic, :intent, :avg_user_message_length, :updated_at)
                 ON CONFLICT (session_id) DO UPDATE SET
-                    message_id      = EXCLUDED.message_id,
-                    sentiment_score = EXCLUDED.sentiment_score,
-                    sentiment_label = EXCLUDED.sentiment_label,
-                    topics          = EXCLUDED.topics,
-                    main_topic      = EXCLUDED.main_topic,
-                    intent          = EXCLUDED.intent
-            """), {**d, "agent_id": agent_id, "topics": _dumps(d["topics"])})
+                    messages                = EXCLUDED.messages,
+                    avg_sentiment_score     = EXCLUDED.avg_sentiment_score,
+                    sentiment_label         = EXCLUDED.sentiment_label,
+                    all_topics              = EXCLUDED.all_topics,
+                    main_topic              = EXCLUDED.main_topic,
+                    intent                  = EXCLUDED.intent,
+                    avg_user_message_length = EXCLUDED.avg_user_message_length,
+                    updated_at              = EXCLUDED.updated_at
+            """), {
+                **d,
+                "agent_id": agent_id,
+                "messages": _dumps(d["messages"]),
+                "all_topics": _dumps(d["all_topics"]),
+            })
 
     def load_scores(self, agent_id: str, session_id: str) -> ScoreData | None:
         with self._engine.connect() as conn:
@@ -247,7 +254,8 @@ class DatabaseDriver(PersistenceDriver):
         if not row:
             return None
         d = dict(row._mapping)
-        d["topics"] = _loads(d["topics"])
+        d["messages"] = _loads(d["messages"]) or []
+        d["all_topics"] = _loads(d["all_topics"]) or []
         return ScoreData.model_validate(d)
 
     # ── Insights ───────────────────────────────────────────────────────────────

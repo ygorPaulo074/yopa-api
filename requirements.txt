@@ -19,6 +19,13 @@ slowapi
 # Análise local de conversas
 textblob
 spacy
+scikit-learn
+argostranslate
+pyspellchecker
+langdetect
+# spaCy models (install manually):
+#   python -m spacy download en_core_web_sm
+#   python -m spacy download pt_core_news_sm
 
 # Sanitização de PII
 presidio-analyzer
@@ -41,3 +48,4 @@ loguru
 pytest
 httpx
 invoke
+fakeredis
