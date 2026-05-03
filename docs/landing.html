@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-ChatBot — Conversational AI API</title>
+    <style>
+        :root {
+            --bg-primary:    #1a1a1a;
+            --bg-nav:        #212121;
+            --bg-card:       #252525;
+            --bg-hover:      #2c2c2c;
+            --border:        #333333;
+            --text-primary:  #e8e8e8;
+            --text-muted:    #9a9a9a;
+            --accent:        #2d5a8e;
+            --accent-hover:  #3d6b99;
+            --accent-light:  #4a7ab5;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            font-size: 15px;
+        }
+
+        /* ── Navbar ─────────────────────────────────────────── */
+
+        nav {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 58px;
+            background: var(--bg-nav);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 40px;
+            z-index: 100;
+        }
+
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 15px;
+            letter-spacing: -0.01em;
+        }
+
+        .nav-logo-mark {
+            width: 22px;
+            height: 22px;
+            background: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: 0;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .nav-link {
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 5px 12px;
+            font-size: 14px;
+            transition: color 0.15s;
+        }
+
+        .nav-link:hover { color: var(--text-primary); }
+
+        .nav-divider {
+            width: 1px;
+            height: 18px;
+            background: var(--border);
+            margin: 0 6px;
+        }
+
+        .nav-btn {
+            background: var(--accent);
+            color: #e8e8e8;
+            text-decoration: none;
+            padding: 6px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.15s;
+        }
+
+        .nav-btn:hover { background: var(--accent-hover); }
+
+        .nav-profile {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: #fff;
+            margin-left: 10px;
+            cursor: pointer;
+            border: 1px solid var(--accent-hover);
+            flex-shrink: 0;
+        }
+
+        /* ── Hero ───────────────────────────────────────────── */
+
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 120px 24px 80px;
+        }
+
+        .hero-inner { max-width: 680px; }
+
+        .hero-eyebrow {
+            display: inline-block;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--accent-light);
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            padding: 4px 12px;
+            margin-bottom: 36px;
+        }
+
+        .hero h1 {
+            font-size: 48px;
+            font-weight: 700;
+            line-height: 1.12;
+            letter-spacing: -0.03em;
+            margin-bottom: 20px;
+            color: var(--text-primary);
+        }
+
+        .hero h1 em {
+            font-style: normal;
+            color: var(--accent-light);
+        }
+
+        .hero-sub {
+            font-size: 17px;
+            color: var(--text-muted);
+            max-width: 520px;
+            margin: 0 auto 48px;
+            line-height: 1.7;
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+
+        .btn {
+            display: inline-block;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            padding: 10px 24px;
+            transition: background 0.15s, border-color 0.15s, color 0.15s;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #e8e8e8;
+        }
+
+        .btn-primary:hover { background: var(--accent-hover); }
+
+        .btn-outline {
+            background: transparent;
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+        }
+
+        .btn-outline:hover {
+            border-color: #555;
+            color: var(--text-primary);
+        }
+
+        /* ── Divider ────────────────────────────────────────── */
+
+        hr {
+            border: none;
+            border-top: 1px solid var(--border);
+        }
+
+        /* ── Features ───────────────────────────────────────── */
+
+        .features {
+            padding: 80px 40px;
+            max-width: 1080px;
+            margin: 0 auto;
+        }
+
+        .section-eyebrow {
+            text-align: center;
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--accent-light);
+            margin-bottom: 14px;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 52px;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1px;
+            border: 1px solid var(--border);
+            background: var(--border);
+        }
+
+        .feature-card {
+            background: var(--bg-card);
+            padding: 32px 28px;
+        }
+
+        .feature-card:hover { background: var(--bg-hover); }
+
+        .feature-tag {
+            display: inline-block;
+            background: var(--accent);
+            color: #c8d8ea;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            padding: 3px 8px;
+            margin-bottom: 20px;
+        }
+
+        .feature-card h3 {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            letter-spacing: -0.01em;
+        }
+
+        .feature-card p {
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.65;
+        }
+
+        /* ── Footer ─────────────────────────────────────────── */
+
+        footer {
+            padding: 28px 40px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        footer a {
+            color: var(--accent-light);
+            text-decoration: none;
+        }
+
+        footer a:hover { text-decoration: underline; }
+
+        /* ── Responsive ─────────────────────────────────────── */
+
+        @media (max-width: 820px) {
+            nav { padding: 0 20px; }
+            .hero h1 { font-size: 34px; }
+            .features { padding: 60px 20px; }
+            .features-grid { grid-template-columns: 1fr; }
+            .nav-link { display: none; }
+            footer { flex-direction: column; gap: 8px; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ── Navbar ──────────────────────────────────────────────── -->
+<nav>
+    <a href="/" class="nav-logo">
+        <div class="nav-logo-mark">AI</div>
+        AI-ChatBot
+    </a>
+    <div class="nav-right">
+        <a href="https://github.com/ygorPaulo074/AI-ChatBot" class="nav-link" target="_blank">GitHub</a>
+        <a href="/docs" class="nav-link">Docs</a>
+        <div class="nav-divider"></div>
+        <a href="/agents" class="nav-btn">Agents</a>
+        <div class="nav-profile" title="Profile">JP</div>
+    </div>
+</nav>
+
+<!-- ── Hero ────────────────────────────────────────────────── -->
+<section class="hero">
+    <div class="hero-inner">
+        <div class="hero-eyebrow">Conversational AI API</div>
+        <h1>Intelligent agents for<br>your <em>business</em></h1>
+        <p class="hero-sub">
+            Multi-tenant API that connects your products to the most capable
+            AI models. Deploy, monitor and scale conversational agents
+            without operational complexity.
+        </p>
+        <div class="hero-actions">
+            <a href="/docs" class="btn btn-primary">Read the Docs</a>
+            <a href="/agents" class="btn btn-outline">Manage Agents</a>
+        </div>
+    </div>
+</section>
+
+<hr>
+
+<!-- ── Features ────────────────────────────────────────────── -->
+<section class="features">
+    <p class="section-eyebrow">Capabilities</p>
+    <h2 class="section-title">Everything you need to deploy agents</h2>
+
+    <div class="features-grid">
+        <div class="feature-card">
+            <div class="feature-tag">Providers</div>
+            <h3>Multiple AI Providers</h3>
+            <p>Switch between Anthropic, OpenAI, Gemini, DeepSeek and Groq without changing your integration.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-tag">Security</div>
+            <h3>Built-in Security</h3>
+            <p>PII sanitization, rate limiting, API key authentication and configurable topic restrictions per agent.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-tag">Analytics</div>
+            <h3>Session Analytics</h3>
+            <p>Sentiment scoring, intent detection, topic tracking and full session history with automatic persistence.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-tag">Escalation</div>
+            <h3>Escalation Triggers</h3>
+            <p>Define conditions — keyword, sentiment, message count or time elapsed — to escalate sessions automatically.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-tag">Storage</div>
+            <h3>Flexible Persistence</h3>
+            <p>Local JSON, PostgreSQL or Webhook. Choose your storage strategy at deployment, switch at any time.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-tag">Knowledge</div>
+            <h3>Knowledge Base</h3>
+            <p>Connect agents to your data via file upload, REST APIs, SQL databases or custom webhooks.</p>
+        </div>
+    </div>
+</section>
+
+<!-- ── Footer ──────────────────────────────────────────────── -->
+<footer>
+    <span>AI-ChatBot &mdash; Conversational AI API</span>
+    <span><a href="https://github.com/ygorPaulo074/AI-ChatBot" target="_blank">GitHub</a></span>
+</footer>
+
+</body>
+</html>

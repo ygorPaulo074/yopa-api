@@ -1,6 +1,6 @@
 """
 Driver de persistência via banco de dados relacional (PostgreSQL 14+).
-Requer schema gerado por create_db_scripts.py e DATABASE_URL no .env.
+Requer schema gerado por deployment_scripts.py (invoke setup) e DATABASE_URL no .env.
 Campos complexos (listas, modelos aninhados) são serializados como JSON.
 """
 
@@ -11,6 +11,7 @@ from src.core.persistence.base import PersistenceDriver
 from src.core.schemas import (
     AgentRecord,
     AgentContextRecord,
+    HistoryMessage,
     UserContextRecord,
     SessionRecord,
     InsightRecord,
@@ -216,6 +217,30 @@ class DatabaseDriver(PersistenceDriver):
                     text(f"DELETE FROM {table} WHERE agent_id = :agent_id AND session_id = :session_id"),
                     {"agent_id": agent_id, "session_id": session_id},
                 )
+
+    # ── Session history ────────────────────────────────────────────────────────
+
+    def save_history(self, agent_id: str, session_id: str, messages: list[HistoryMessage]) -> None:
+        with self._engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO session_history (session_id, agent_id, messages)
+                VALUES (:session_id, :agent_id, :messages)
+                ON CONFLICT (session_id) DO UPDATE SET messages = EXCLUDED.messages
+            """), {
+                "session_id": session_id,
+                "agent_id": agent_id,
+                "messages": _dumps([m.model_dump() for m in messages]),
+            })
+
+    def load_history(self, agent_id: str, session_id: str) -> list[HistoryMessage]:
+        with self._engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT messages FROM session_history WHERE agent_id = :agent_id AND session_id = :session_id"),
+                {"agent_id": agent_id, "session_id": session_id},
+            ).fetchone()
+        if not row:
+            return []
+        return [HistoryMessage.model_validate(m) for m in (_loads(row.messages) or [])]
 
     # ── Scores ─────────────────────────────────────────────────────────────────
 

@@ -9,7 +9,8 @@ from datetime import datetime, timezone
 
 from src.clients.ai_client import AIClient
 from src.core.cache.client import CacheClient
-from src.core.schemas import HistoryMessage, SessionMeta
+from src.core.persistence.factory import get_driver
+from src.core.schemas import HistoryMessage, SessionMeta, SessionRecord
 from src.infrastructure.config import settings
 from src.services.context_service import ContextService
 from src.services import quality_analyzer
@@ -93,6 +94,7 @@ class AIService:
             "total_tokens": meta.total_tokens + ai_response.usage.total_tokens,
         })
         self.cache.set_session_meta(session_id, meta)
+        self._persist_snapshot(agent_id, session_id, meta, scores)
 
         return {
             "message_id": assistant_msg_id,
@@ -125,6 +127,30 @@ class AIService:
         if not record:
             return None
         return record.context.fallback_message
+
+    # ── Incremental persistence ────────────────────────────────────────────────
+
+    def _persist_snapshot(self, agent_id: str, session_id: str, meta: SessionMeta, scores) -> None:
+        driver = get_driver()
+        driver.save_session(SessionRecord(
+            session_id=meta.session_id,
+            agent_id=agent_id,
+            user_id=meta.user_id,
+            model=meta.model,
+            started_at=meta.started_at,
+            ended_at=meta.ended_at,
+            total_messages=meta.total_messages,
+            input_tokens=meta.input_tokens,
+            output_tokens=meta.output_tokens,
+            total_tokens=meta.total_tokens,
+            resolved=meta.resolved,
+            escalated=meta.escalated,
+        ))
+        if scores:
+            driver.save_scores(agent_id, scores)
+        history = self.cache.get_history(session_id)
+        if history:
+            driver.save_history(agent_id, session_id, history)
 
     # ── Internal helpers ───────────────────────────────────────────────────────
 

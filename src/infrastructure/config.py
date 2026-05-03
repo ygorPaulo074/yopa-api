@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     SESSION_TTL: int = 86400
     STORAGE_TYPE: str = "local"
     DATABASE_URL: str = ""
+    DB_USER: str = ""
+    DB_PASSWORD: str = ""
+    DB_NAME: str = ""
     WEBHOOK_URL: str = ""
     ANALYZER_LANGUAGES: list[str] = ["en"]
 

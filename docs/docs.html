@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docs — AI-ChatBot</title>
+    <style>
+        :root {
+            --bg-primary:   #1a1a1a;
+            --bg-nav:       #212121;
+            --bg-card:      #252525;
+            --bg-sidebar:   #1e1e1e;
+            --bg-hover:     #2a2a2a;
+            --bg-code:      #1c1c1c;
+            --border:       #333333;
+            --text-primary: #e8e8e8;
+            --text-muted:   #9a9a9a;
+            --accent:       #2d5a8e;
+            --accent-hover: #3d6b99;
+            --accent-light: #4a7ab5;
+            --green-text:   #4caf82;
+            --orange-text:  #c97a3a;
+            --red-text:     #cf6679;
+            --purple-text:  #9b7bd4;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        /* ── Navbar ─────────────────────────────────────────── */
+
+        nav {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 58px;
+            background: var(--bg-nav);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 40px;
+            z-index: 100;
+        }
+
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .nav-logo-mark {
+            width: 22px;
+            height: 22px;
+            background: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .nav-link {
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 5px 12px;
+            font-size: 14px;
+            transition: color 0.15s;
+        }
+
+        .nav-link:hover,
+        .nav-link.active { color: var(--text-primary); }
+
+        .nav-divider {
+            width: 1px;
+            height: 18px;
+            background: var(--border);
+            margin: 0 6px;
+        }
+
+        .nav-btn {
+            background: var(--accent);
+            color: #e8e8e8;
+            text-decoration: none;
+            padding: 6px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.15s;
+        }
+
+        .nav-btn:hover { background: var(--accent-hover); }
+
+        .nav-profile {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: #fff;
+            margin-left: 10px;
+            cursor: pointer;
+            border: 1px solid var(--accent-hover);
+        }
+
+        /* ── Layout ─────────────────────────────────────────── */
+
+        .layout {
+            padding-top: 58px;
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* ── Sidebar ─────────────────────────────────────────── */
+
+        .sidebar {
+            width: 240px;
+            flex-shrink: 0;
+            background: var(--bg-sidebar);
+            border-right: 1px solid var(--border);
+            position: fixed;
+            top: 58px;
+            bottom: 0;
+            overflow-y: auto;
+            padding: 24px 0;
+        }
+
+        .sidebar-section {
+            margin-bottom: 8px;
+        }
+
+        .sidebar-section-title {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            padding: 0 20px 8px;
+        }
+
+        .sidebar-link {
+            display: block;
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 5px 20px;
+            font-size: 13px;
+            transition: color 0.12s, background 0.12s;
+            border-left: 2px solid transparent;
+        }
+
+        .sidebar-link:hover {
+            color: var(--text-primary);
+            background: var(--bg-hover);
+        }
+
+        .sidebar-link.active {
+            color: var(--accent-light);
+            border-left-color: var(--accent-light);
+            background: var(--bg-hover);
+        }
+
+        /* ── Content ─────────────────────────────────────────── */
+
+        .content {
+            margin-left: 240px;
+            flex: 1;
+            padding: 48px 60px;
+            max-width: 860px;
+        }
+
+        .doc-section {
+            margin-bottom: 56px;
+            padding-bottom: 56px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .doc-section:last-child {
+            border-bottom: none;
+        }
+
+        .section-label {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--accent-light);
+            margin-bottom: 10px;
+        }
+
+        h1 {
+            font-size: 26px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 12px;
+        }
+
+        h2 {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+            margin: 32px 0 12px;
+        }
+
+        h3 {
+            font-size: 15px;
+            font-weight: 600;
+            margin: 24px 0 8px;
+        }
+
+        p {
+            color: var(--text-muted);
+            margin-bottom: 16px;
+            line-height: 1.7;
+        }
+
+        /* ── Endpoint block ──────────────────────────────────── */
+
+        .endpoint {
+            border: 1px solid var(--border);
+            margin: 24px 0;
+            overflow: hidden;
+        }
+
+        .endpoint-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .method {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            padding: 2px 8px;
+            min-width: 46px;
+            text-align: center;
+        }
+
+        .method-post { background: #1a3a2a; color: var(--green-text); }
+        .method-get  { background: #1a2a3a; color: var(--accent-light); }
+        .method-put  { background: #2a2a1a; color: var(--orange-text); }
+        .method-delete { background: #2a1a1a; color: var(--red-text); }
+
+        .endpoint-path {
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: var(--text-primary);
+            flex: 1;
+        }
+
+        .endpoint-desc {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .endpoint-body {
+            padding: 20px 16px;
+        }
+
+        .endpoint-body p {
+            font-size: 13px;
+            margin-bottom: 12px;
+        }
+
+        /* ── Code block ──────────────────────────────────────── */
+
+        .code-label {
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        pre {
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            padding: 16px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            overflow-x: auto;
+            margin-bottom: 16px;
+            color: #c8d8e8;
+        }
+
+        .token-key    { color: #7ab5d4; }
+        .token-string { color: #a8d0a8; }
+        .token-number { color: var(--orange-text); }
+        .token-bool   { color: var(--purple-text); }
+
+        /* ── Param table ─────────────────────────────────────── */
+
+        .param-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+
+        .param-table th {
+            text-align: left;
+            padding: 8px 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .param-table td {
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            vertical-align: top;
+        }
+
+        .param-table td:first-child {
+            font-family: 'Courier New', monospace;
+            color: var(--accent-light);
+            white-space: nowrap;
+        }
+
+        .param-table td:nth-child(2) {
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
+        .param-table td:nth-child(3) {
+            color: var(--text-muted);
+        }
+
+        code {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            background: var(--bg-code);
+            border: 1px solid var(--border);
+            padding: 1px 5px;
+            color: var(--accent-light);
+        }
+
+        /* ── Auth callout ────────────────────────────────────── */
+
+        .callout {
+            border: 1px solid var(--border);
+            border-left: 3px solid var(--accent);
+            background: var(--bg-card);
+            padding: 14px 16px;
+            margin-bottom: 24px;
+            font-size: 13px;
+        }
+
+        .callout p { margin: 0; color: var(--text-muted); }
+        .callout strong { color: var(--text-primary); }
+    </style>
+</head>
+<body>
+
+<nav>
+    <a href="landing.html" class="nav-logo">
+        <div class="nav-logo-mark">AI</div>
+        AI-ChatBot
+    </a>
+    <div class="nav-right">
+        <a href="https://github.com/ygorPaulo074/AI-ChatBot" class="nav-link" target="_blank">GitHub</a>
+        <a href="docs.html" class="nav-link active">Docs</a>
+        <div class="nav-divider"></div>
+        <a href="agents.html" class="nav-btn">Agents</a>
+        <div class="nav-profile" title="Profile" onclick="location.href='profile.html'">JP</div>
+    </div>
+</nav>
+
+<div class="layout">
+
+    <!-- ── Sidebar ──────────────────────────────────────── -->
+    <aside class="sidebar">
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">Getting Started</div>
+            <a href="#overview" class="sidebar-link active">Overview</a>
+            <a href="#authentication" class="sidebar-link">Authentication</a>
+            <a href="#quickstart" class="sidebar-link">Quickstart</a>
+        </div>
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">Agents</div>
+            <a href="#agent-create" class="sidebar-link">Create agent</a>
+            <a href="#agent-context" class="sidebar-link">Set context</a>
+            <a href="#agent-metrics" class="sidebar-link">Metrics</a>
+        </div>
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">Chat</div>
+            <a href="#chat-send" class="sidebar-link">Send message</a>
+            <a href="#chat-end" class="sidebar-link">End session</a>
+            <a href="#chat-escalate" class="sidebar-link">Escalation</a>
+        </div>
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">Data</div>
+            <a href="#data-sessions" class="sidebar-link">Sessions</a>
+            <a href="#data-insights" class="sidebar-link">Insights</a>
+            <a href="#data-analytics" class="sidebar-link">Analytics</a>
+        </div>
+        <div class="sidebar-section">
+            <div class="sidebar-section-title">Guides</div>
+            <a href="#guide-context" class="sidebar-link">Agent context</a>
+            <a href="#guide-escalation" class="sidebar-link">Escalation triggers</a>
+            <a href="#guide-knowledge" class="sidebar-link">Knowledge base</a>
+            <a href="#guide-storage" class="sidebar-link">Storage options</a>
+        </div>
+    </aside>
+
+    <!-- ── Content ──────────────────────────────────────── -->
+    <main class="content">
+
+        <!-- Overview -->
+        <section class="doc-section" id="overview">
+            <div class="section-label">Getting Started</div>
+            <h1>API Reference</h1>
+            <p>
+                The AI-ChatBot API is a multi-tenant REST API for deploying and operating conversational agents.
+                Each agent has its own configuration, session history, analytics, and optional knowledge base.
+            </p>
+            <p>Base URL: <code>http://your-host:8000</code></p>
+        </section>
+
+        <!-- Authentication -->
+        <section class="doc-section" id="authentication">
+            <h2>Authentication</h2>
+            <p>All endpoints (except <code>POST /agent</code>) require an agent-specific API key passed as a request header.</p>
+            <div class="callout">
+                <p><strong>Header:</strong> <code>X-API-Key: &lt;your-api-key&gt;</code><br>
+                The API key is generated once on agent creation. Store it securely — it cannot be recovered.</p>
+            </div>
+        </section>
+
+        <!-- Quickstart -->
+        <section class="doc-section" id="quickstart">
+            <h2>Quickstart</h2>
+            <p>Create an agent, configure its context, and send the first message in three steps.</p>
+
+            <h3>1. Create an agent</h3>
+            <div class="code-label">Request</div>
+            <pre>POST /agent
+Content-Type: application/json
+
+{
+  <span class="token-key">"name"</span>: <span class="token-string">"My Agent"</span>,
+  <span class="token-key">"owner"</span>: <span class="token-string">"you@company.com"</span>
+}</pre>
+            <div class="code-label">Response</div>
+            <pre>{
+  <span class="token-key">"agent_id"</span>: <span class="token-string">"agt_..."</span>,
+  <span class="token-key">"api_key"</span>: <span class="token-string">"sk_live_..."</span>
+}</pre>
+
+            <h3>2. Set the agent context</h3>
+            <div class="code-label">Request</div>
+            <pre>PUT /agent/context
+X-API-Key: sk_live_...
+
+{
+  <span class="token-key">"persona"</span>: <span class="token-string">"You are a helpful support agent for Loja X."</span>,
+  <span class="token-key">"tone"</span>: <span class="token-string">"formal"</span>,
+  <span class="token-key">"language"</span>: <span class="token-string">"pt-BR"</span>
+}</pre>
+
+            <h3>3. Send a message</h3>
+            <div class="code-label">Request</div>
+            <pre>POST /chat
+X-API-Key: sk_live_...
+
+{
+  <span class="token-key">"session_id"</span>: <span class="token-string">"sess_abc123"</span>,
+  <span class="token-key">"message"</span>: <span class="token-string">"What is your return policy?"</span>
+}</pre>
+            <div class="code-label">Response</div>
+            <pre>{
+  <span class="token-key">"message_id"</span>: <span class="token-string">"msg_..."</span>,
+  <span class="token-key">"content"</span>: <span class="token-string">"Our return policy allows returns within 30 days..."</span>,
+  <span class="token-key">"usage"</span>: { <span class="token-key">"input_tokens"</span>: <span class="token-number">120</span>, <span class="token-key">"output_tokens"</span>: <span class="token-number">42</span>, <span class="token-key">"total_tokens"</span>: <span class="token-number">162</span> },
+  <span class="token-key">"response_time_ms"</span>: <span class="token-number">834</span>
+}</pre>
+        </section>
+
+        <!-- Agents -->
+        <section class="doc-section" id="agent-create">
+            <div class="section-label">Agents</div>
+            <h2>Agent Endpoints</h2>
+
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-path">/agent</span>
+                    <span class="endpoint-desc">Create a new agent</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Creates an agent and returns the API key. The key is shown only once.</p>
+                    <table class="param-table">
+                        <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+                        <tr><td>name</td><td>string</td><td>Display name for the agent</td></tr>
+                        <tr><td>owner</td><td>string</td><td>Owner identifier (email or ID)</td></tr>
+                        <tr><td>tags</td><td>list[string]</td><td>Optional tags for filtering</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="endpoint" id="agent-context">
+                <div class="endpoint-header">
+                    <span class="method method-put">PUT</span>
+                    <span class="endpoint-path">/agent/context</span>
+                    <span class="endpoint-desc">Update agent context</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Each update creates a new versioned snapshot. See the <a href="#guide-context" style="color:var(--accent-light)">Agent context guide</a> for all fields.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/agent/context</span>
+                    <span class="endpoint-desc">Get current context</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Returns the latest version of the agent context.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/agent/context/history</span>
+                    <span class="endpoint-desc">List context versions</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Returns all versioned snapshots of the context with change history.</p>
+                </div>
+            </div>
+
+            <div class="endpoint" id="agent-metrics">
+                <div class="endpoint-header">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/agent/metrics</span>
+                    <span class="endpoint-desc">Agent metrics</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Returns aggregated metrics: session count, token usage, average sentiment, escalation rate.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="method method-delete">DELETE</span>
+                    <span class="endpoint-path">/agent</span>
+                    <span class="endpoint-desc">Delete agent and all data</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Permanently removes the agent, all sessions, contexts, and user data. Irreversible.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Chat -->
+        <section class="doc-section" id="chat-send">
+            <div class="section-label">Chat</div>
+            <h2>Chat Endpoints</h2>
+
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-path">/chat</span>
+                    <span class="endpoint-desc">Send a message</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Processes a user message and returns the AI response. Triggers NLP analysis and incremental persistence on every call.</p>
+                    <table class="param-table">
+                        <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+                        <tr><td>session_id</td><td>string</td><td>Unique session identifier (generate client-side)</td></tr>
+                        <tr><td>user_id</td><td>string?</td><td>Optional user identifier for context tracking</td></tr>
+                        <tr><td>message</td><td>string</td><td>The user's message text</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="endpoint" id="chat-end">
+                <div class="endpoint-header">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-path">/chat/{session_id}/end</span>
+                    <span class="endpoint-desc">End a session</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Finalizes the session, generates insights, and persists full history. Updates user context if <code>user_id</code> was provided.</p>
+                </div>
+            </div>
+
+            <div class="endpoint" id="chat-escalate">
+                <div class="endpoint-header">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-path">/chat/{session_id}/escalate</span>
+                    <span class="endpoint-desc">Escalate session</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Marks the session as escalated. Can be triggered manually or automatically via escalation triggers.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="method method-post">POST</span>
+                    <span class="endpoint-path">/chat/{session_id}/resolve</span>
+                    <span class="endpoint-desc">Resolve session</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Marks the session as resolved without ending it.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Data -->
+        <section class="doc-section" id="data-sessions">
+            <div class="section-label">Data</div>
+            <h2>Data Endpoints</h2>
+
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/data/chat</span>
+                    <span class="endpoint-desc">List sessions</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Returns all sessions for the authenticated agent.</p>
+                </div>
+            </div>
+
+            <div class="endpoint">
+                <div class="endpoint-header">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/data/chat/{session_id}</span>
+                    <span class="endpoint-desc">Get session history</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Returns the full message history. Falls back to the persistence driver if the session has expired from Redis cache.</p>
+                </div>
+            </div>
+
+            <div class="endpoint" id="data-insights">
+                <div class="endpoint-header">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/data/chat/{session_id}/insights</span>
+                    <span class="endpoint-desc">Session insights</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Returns AI-generated insights for an ended session: key points, suggested actions, summary.</p>
+                </div>
+            </div>
+
+            <div class="endpoint" id="data-analytics">
+                <div class="endpoint-header">
+                    <span class="method method-get">GET</span>
+                    <span class="endpoint-path">/data/analytics</span>
+                    <span class="endpoint-desc">Analytics</span>
+                </div>
+                <div class="endpoint-body">
+                    <p>Aggregated agent analytics: sessions over time, average sentiment, top topics, escalation rate.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Guide: Escalation -->
+        <section class="doc-section" id="guide-escalation">
+            <div class="section-label">Guides</div>
+            <h2>Escalation Triggers</h2>
+            <p>Escalation conditions are evaluated by the backend after every message — they are never sent to the AI model.</p>
+
+            <table class="param-table">
+                <tr><th>Type</th><th>Parameter</th><th>Description</th></tr>
+                <tr><td>sentiment</td><td>threshold: float</td><td>Escalates if avg sentiment &lt; -threshold</td></tr>
+                <tr><td>keyword</td><td>values: list[str]</td><td>Escalates if the last message contains any keyword</td></tr>
+                <tr><td>message_count</td><td>value: int</td><td>Escalates after N user messages</td></tr>
+                <tr><td>topic</td><td>values: list[str]</td><td>Escalates if detected topic is in the list</td></tr>
+                <tr><td>time_elapsed</td><td>value: float (seconds)</td><td>Escalates after N seconds since session start</td></tr>
+                <tr><td>intent</td><td>value: str</td><td>Escalates if detected intent matches</td></tr>
+            </table>
+
+            <div class="code-label">Example</div>
+            <pre>{
+  <span class="token-key">"operator"</span>: <span class="token-string">"OR"</span>,
+  <span class="token-key">"conditions"</span>: [
+    { <span class="token-key">"type"</span>: <span class="token-string">"sentiment"</span>, <span class="token-key">"threshold"</span>: <span class="token-number">0.4</span> },
+    { <span class="token-key">"type"</span>: <span class="token-string">"keyword"</span>, <span class="token-key">"values"</span>: [<span class="token-string">"refund"</span>, <span class="token-string">"cancel"</span>] },
+    { <span class="token-key">"type"</span>: <span class="token-string">"message_count"</span>, <span class="token-key">"value"</span>: <span class="token-number">10</span> }
+  ]
+}</pre>
+        </section>
+
+    </main>
+</div>
+
+<script>
+    // Highlight active sidebar link on scroll
+    const sections = document.querySelectorAll('[id]');
+    const links = document.querySelectorAll('.sidebar-link');
+
+    window.addEventListener('scroll', () => {
+        let current = '';
+        sections.forEach(s => {
+            if (window.scrollY >= s.offsetTop - 80) current = s.id;
+        });
+        links.forEach(l => {
+            l.classList.toggle('active', l.getAttribute('href') === '#' + current);
+        });
+    });
+</script>
+
+</body>
+</html>

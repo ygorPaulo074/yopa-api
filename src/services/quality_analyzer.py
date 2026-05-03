@@ -18,7 +18,7 @@ from spellchecker import SpellChecker
 from textblob import TextBlob
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from src.core.schemas import MessageScore, ScoreData
+from src.core.schemas import HistoryMessage, MessageScore, ScoreData
 from src.infrastructure.config import settings
 
 
@@ -134,6 +134,13 @@ def _compute_main_topic(messages: list[MessageScore]) -> str | None:
 
 
 # ── API pública ────────────────────────────────────────────────────────────────
+
+def detect_dominant_language(messages: list[HistoryMessage]) -> str | None:
+    user_texts = [m.content for m in messages if m.role == "user" and m.content.strip()]
+    if not user_texts:
+        return None
+    langs = [_detect_language(t) for t in user_texts]
+    return Counter(langs).most_common(1)[0][0] if langs else None
 
 def analyze(
     message_id: str,

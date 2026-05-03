@@ -279,6 +279,28 @@
     }
     .empty-note .icon { font-size: 32px; display: block; margin-bottom: 8px; }
 
+    /* ── Session browser ──────────────────────────────────────── */
+    #sessions-list { max-height: 260px; overflow-y: auto; margin-top: 8px; }
+    .session-item {
+      padding: 8px 10px; border-radius: 6px; cursor: pointer;
+      border: 1px solid var(--border); margin-bottom: 6px;
+      transition: border-color .15s, background .15s;
+    }
+    .session-item:hover  { border-color: var(--accent); background: var(--surface2); }
+    .session-item.active { border-color: var(--accent); background: var(--surface2); }
+    .session-item-id   { font-family: var(--mono); font-size: 11px; color: var(--text); }
+    .session-item-meta { font-size: 11px; color: var(--text-dim); margin-top: 3px; line-height: 1.5; }
+    .section-title-row {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 0;
+    }
+    .btn-icon {
+      background: transparent; border: 1px solid var(--border); border-radius: 5px;
+      color: var(--text-dim); cursor: pointer; font-size: 13px;
+      padding: 2px 7px; line-height: 1.4;
+      transition: border-color .15s, color .15s;
+    }
+    .btn-icon:hover { border-color: var(--accent); color: var(--text); }
+
     /* ── Toast ────────────────────────────────────────────────── */
     #toast {
       position: fixed; bottom: 24px; right: 24px;
@@ -347,6 +369,16 @@
     <button class="btn btn-ghost" onclick="resolveSession()">Marcar resolvida</button>
     <button class="btn btn-danger" onclick="escalateSession()">Escalonar</button>
     <button class="btn btn-info" onclick="openInsights()">Ver Insights</button>
+  </div>
+
+  <div class="section">
+    <div class="section-title-row">
+      <div class="section-title" style="margin-bottom:0">Sessões Passadas</div>
+      <button class="btn-icon" onclick="loadSessions()" title="Atualizar">↺</button>
+    </div>
+    <div id="sessions-list">
+      <div style="font-size:12px;color:var(--text-dim);margin-top:8px;">Configure a API Key e clique em ↺</div>
+    </div>
   </div>
 
   <div class="section" id="agent-info-section" style="display:none">
@@ -514,6 +546,65 @@ async function loadAgentInfo() {
     $('agent-info-section').style.display = 'block';
     if (!sessionId()) newSession();
     toast('Agente carregado');
+    loadSessions();
+  } catch { toast('Sem conexão', 'err'); }
+}
+
+// ── Sessions browser ──────────────────────────────────────────────
+async function loadSessions() {
+  if (!apiKey()) { toast('Configure a API Key', 'err'); return; }
+  const list = $('sessions-list');
+  list.innerHTML = '<div class="loading">Carregando…</div>';
+  try {
+    const { ok, data } = await api('GET', '/data/chat');
+    if (!ok) { list.innerHTML = '<div style="font-size:12px;color:var(--error)">Erro ao carregar</div>'; return; }
+    if (!data.chats || data.chats.length === 0) {
+      list.innerHTML = '<div style="font-size:12px;color:var(--text-dim);margin-top:8px;">Nenhuma sessão encerrada ainda.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    const sorted = [...data.chats].sort((a, b) => (b.ended_at || '').localeCompare(a.ended_at || ''));
+    sorted.forEach(s => {
+      const item = document.createElement('div');
+      item.className = 'session-item';
+      item.dataset.sid = s.session_id;
+      const badge = s.escalated ? '<span class="badge badge-err">Escalonada</span>'
+                  : s.resolved  ? '<span class="badge badge-ok">Resolvida</span>'
+                  :               '<span class="badge badge-neutral">Encerrada</span>';
+      const date = s.ended_at ? new Date(s.ended_at).toLocaleString('pt-BR') : '—';
+      item.innerHTML = `
+        <div class="session-item-id">${s.session_id.slice(0, 18)}…</div>
+        <div class="session-item-meta">${date}<br>${s.total_messages} msgs · ${(s.total_tokens || 0).toLocaleString('pt-BR')} tokens · ${badge}</div>
+      `;
+      item.onclick = () => loadPastSession(s.session_id, item);
+      list.appendChild(item);
+    });
+  } catch { list.innerHTML = '<div style="font-size:12px;color:var(--error)">Sem conexão</div>'; }
+}
+
+async function loadPastSession(sid, el) {
+  if (!apiKey()) { toast('Configure a API Key', 'err'); return; }
+  document.querySelectorAll('.session-item').forEach(i => i.classList.remove('active'));
+  el?.classList.add('active');
+  try {
+    const { ok, data } = await api('GET', `/data/chat/${sid}`);
+    if (!ok) { toast(data.detail || 'Erro ao carregar sessão', 'err'); return; }
+    $('session-id').value = sid;
+    $('top-session-id').textContent = sid.slice(0, 8) + '…';
+    const msgs = $('messages');
+    msgs.innerHTML = '';
+    const history = data.conversation || [];
+    if (history.length === 0) {
+      msgs.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:13px;">Nenhuma mensagem nesta sessão.</div>';
+    } else {
+      history.forEach(entry => {
+        const m = entry.message;
+        appendMsg(m.role, m.content, { tokens: m.tokens, rt: m.response_time_ms });
+      });
+    }
+    switchTab('chat');
+    $('session-status').innerHTML = '<span class="badge badge-neutral">Histórico carregado (somente leitura)</span>';
+    toast(`Sessão ${sid.slice(0, 8)}… carregada`);
   } catch { toast('Sem conexão', 'err'); }
 }
 
