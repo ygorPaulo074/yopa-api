@@ -975,7 +975,7 @@ AI-ChatBot/
     ├── infrastructure/            # configurações globais e infraestrutura transversal
     │   └── config.py              # variáveis de ambiente, settings, CORS, rate limiter
     ├── core/                      # lógica central e utilitários transversais
-    │   ├── context_builder.py     # AgentContext (Pydantic) → context.xml ✅
+    │   ├── context_builder.py     # AgentContext (Pydantic) → system prompt XML (cacheado no Redis)
     │   ├── security.py            # sanitização de PII, hash de API Key (placeholder)
     │   ├── cache/                 # camada de cache Redis
     │   │   ├── __init__.py
@@ -986,7 +986,7 @@ AI-ChatBot/
     │       ├── base.py            # interface abstrata — contrato dos drivers
     │       ├── factory.py         # resolve driver pelo STORAGE_TYPE do .env
     │       └── drivers/
-    │           ├── local.py       # persistência em arquivos (XML, JSON)
+    │           ├── local.py       # persistência em arquivos JSON
     │           ├── database.py    # persistência via Prisma/SQL
     │           └── webhook.py     # despacho HTTP para sistema externo
     ├── services/                  # lógica de negócio — orquestra core e clients
@@ -1029,88 +1029,145 @@ AI-ChatBot/
 <a id="pasta-data"></a>
 ## Pasta `data/`
 
-A pasta `data/` é gerada automaticamente em runtime e **não faz parte do repositório**. Sua localização padrão é a raiz do projeto (`AI-ChatBot/data/`), configurável via variável de ambiente `DATA_PATH` no `.env`.
+A pasta `data/` é gerada automaticamente em runtime e **não faz parte do repositório** (somente `data/agents/` está no `.gitignore` — o `data/README.md` é versionado). Sua localização padrão é a raiz do projeto (`AI-ChatBot/data/`), configurável via variável de ambiente `DATA_PATH` no `.env`.
 
 ```
 data/
 └── agents/
     └── {agent_id}/
-        ├── context.xml                        # contexto do agente em XML
+        ├── agent.json                         # criado no POST /agent
+        ├── context/
+        │   ├── current.json                   # criado no POST /agent, atualizado no PUT /agent/context
+        │   └── history/
+        │       └── v{n}.json                  # snapshot imutável de cada versão do contexto
+        ├── users/
+        │   └── {user_id}.json                 # contexto acumulado por usuário
         └── chats/
             └── {session_id}/
-                ├── scores.json                # scores locais gerados por textblob e spaCy
-                └── insights.xml               # análise da IA gerada sob demanda
+                ├── session.json               # criado no POST /chat/{id}/end, resolve ou escalate
+                ├── scores.json                # criado apenas no POST /chat/{id}/end
+                └── insights.json              # criado sob demanda via GET /data/chat/{id}/insights
 ```
 
-### `context.xml`
+> **O system prompt XML não é gravado em disco** — é construído pelo `context_builder.py` e mantido exclusivamente no Redis.
+>
+> **`chats/` não é criado durante o `POST /chat`** — mensagens ficam no Redis durante a sessão ativa. Os arquivos só são gravados ao encerrar via `POST /chat/{session_id}/end`.
+>
+> **`users/` e `chats/`** são criados conforme o uso — um agente recém-criado terá apenas `agent.json` e `context/`.
 
-Gerado pelo `context_builder.py` no `POST /agent` e regenerado no `PUT /agent`. Contém todas as instruções de comportamento da IA em formato XML, injetado no prompt a cada chamada do `POST /chat`. A versão é incrementada automaticamente a cada atualização.
+### `agent.json`
 
-```xml
-<agent>
-  <persona>Ana</persona>
-  <tone>formal</tone>
-  <language>pt-BR</language>
-  <segment>ecommerce</segment>
-  <behavior>Responda apenas sobre pedidos e entregas.</behavior>
-  <restrictions>
-    <topic>política interna</topic>
-    <topic>dados de outros clientes</topic>
-    <file name="termos_de_uso.pdf" />
-  </restrictions>
-  <fallback>Não consegui entender, pode reformular?</fallback>
-  <escalation operator="OR">
-    <condition type="keyword">atendente, gerente</condition>
-    <condition type="sentiment" threshold="0.8">negative</condition>
-    <condition type="message_count">10</condition>
-    <condition type="topic">reembolso</condition>
-    <condition type="time_elapsed">300</condition>
-    <condition type="intent">cancelamento, processo judicial</condition>
-  </escalation>
-  <version>1</version>
-</agent>
+Registro persistido no `POST /agent`. Contém identificação, owner, hash da API Key e timestamps.
+
+```json
+{
+  "agent_id": "d9f53d15-...",
+  "name": "Assistente de Suporte",
+  "owner": "empresa",
+  "api_key_hash": "9ab44a...",
+  "tags": ["suporte", "ecommerce"],
+  "created_at": "2026-04-25T18:00:00+00:00",
+  "updated_at": "2026-04-25T18:00:00+00:00",
+  "active_since": null,
+  "last_activity_at": null
+}
 ```
 
-### `scores.json`
+### `context/current.json`
 
-Gerado localmente pelo script de análise após cada mensagem do `POST /chat`, sem consumo de tokens. Alimenta as rotas de insights e o `GET /data/analytics`.
+Versão atual do contexto do agente. Persistida no `POST /agent` e atualizada no `PUT /agent/context`. O campo `version` é incrementado a cada atualização.
+
+```json
+{
+  "agent_id": "d9f53d15-...",
+  "version": 2,
+  "context": {
+    "tone": "formal",
+    "language": "pt-BR",
+    "segment": "ecommerce",
+    "persona": "Ana",
+    "behavior": "Responda apenas sobre pedidos e entregas.",
+    "fallback_message": "Não consegui entender, pode reformular?",
+    "restrictions": { "topics": ["política interna"], "files": [] },
+    "knowledge_base": { "urls": ["https://meusite.com/faq"], "files": [] },
+    "escalation_trigger": { "operator": "OR", "conditions": [] }
+  },
+  "changes": ["tone", "behavior"],
+  "updated_at": "2026-04-27T10:00:00+00:00"
+}
+```
+
+### `context/history/v{n}.json`
+
+Snapshot imutável de cada versão do contexto. Mesmo schema de `current.json`. Permite auditar mudanças de comportamento do agente ao longo do tempo via `GET /agent/context/history`.
+
+### `chats/{session_id}/session.json`
+
+Metadados da sessão. Criado quando `POST /chat/{session_id}/end` é chamado.
+
+```json
+{
+  "session_id": "abc123",
+  "agent_id": "d9f53d15-...",
+  "user_id": "user_456",
+  "model": "groq/llama-3.3-70b-versatile",
+  "started_at": "2026-04-25T18:00:00+00:00",
+  "ended_at": "2026-04-25T18:12:00+00:00",
+  "total_messages": 8,
+  "input_tokens": 980,
+  "output_tokens": 660,
+  "total_tokens": 1640,
+  "resolved": true,
+  "escalated": false
+}
+```
+
+### `chats/{session_id}/scores.json`
+
+Scores NLP acumulados durante a sessão pelo `quality_analyzer`. Criado junto com `session.json` ao encerrar a sessão.
 
 ```json
 {
   "session_id": "abc123",
   "messages": [
-    { "message_id": "msg_001", "sentiment_score": 0.1, "topics": ["entrega"] },
-    { "message_id": "msg_003", "sentiment_score": -0.4, "topics": ["prazo", "atraso"] },
-    { "message_id": "msg_007", "sentiment_score": -0.8, "topics": ["reembolso"] }
+    {
+      "message_id": "msg_001",
+      "role": "user",
+      "text_length": 32,
+      "sentiment_score": 0.1,
+      "sentiment_label": "positive",
+      "topics": ["entrega"],
+      "intent": "track order"
+    }
   ],
-  "summary": {
-    "avg_sentiment": -0.3,
-    "sentiment_label": "negative",
-    "all_topics": ["entrega", "prazo", "atraso", "reembolso"],
-    "main_topic": "atraso na entrega",
-    "intent": "reembolso"
-  }
+  "avg_sentiment_score": -0.3,
+  "sentiment_label": "negative",
+  "all_topics": ["entrega", "prazo", "atraso"],
+  "main_topic": "atraso",
+  "intent": "reembolso",
+  "avg_user_message_length": 42.0,
+  "updated_at": "2026-04-25T18:12:00+00:00"
 }
 ```
 
-### `insights.xml`
+### `chats/{session_id}/insights.json`
 
-Gerado pela IA sob demanda via `GET /data/chat/{session_id}/insights` ou `GET /data/chat/{session_id}/insights/suggestions`. A IA recebe os `scores.json` como entrada, reduzindo significativamente o contexto necessário e o consumo de tokens.
+Gerado pela IA sob demanda via `GET /data/chat/{session_id}/insights` ou `GET /data/chat/{session_id}/insights/suggestions`. Persistido após a primeira geração para evitar reprocessamento.
 
-```xml
-<insights>
-  <session_id>abc123</session_id>
-  <generated_at>2026-04-25T18:15:00Z</generated_at>
-  <key_points>
-    <item>Cliente insatisfeito com prazo</item>
-    <item>Pedido atrasado 3 dias</item>
-  </key_points>
-  <suggested_actions>
-    <item>Oferecer reembolso parcial</item>
-    <item>Acionar equipe de logística</item>
-  </suggested_actions>
-  <summary>Cliente contatou suporte sobre atraso em pedido. Sentimento deteriorou progressivamente até escalonamento.</summary>
-</insights>
+```json
+{
+  "session_id": "abc123",
+  "generated_at": "2026-04-25T18:15:00+00:00",
+  "key_points": [
+    "Cliente insatisfeito com prazo",
+    "Pedido atrasado 3 dias"
+  ],
+  "suggested_actions": [
+    "Oferecer reembolso parcial",
+    "Acionar equipe de logística"
+  ],
+  "summary": "Cliente contatou suporte sobre atraso em pedido. Sentimento deteriorou progressivamente até escalonamento."
+}
 ```
 
 ---
