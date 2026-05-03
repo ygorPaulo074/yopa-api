@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from slowapi.errors import RateLimitExceeded
 from src.infrastructure.config import settings, LIMITER
 from src.routes.agent.index import router as agent_router
@@ -32,3 +32,8 @@ app.add_middleware(
 app.include_router(agent_router)
 app.include_router(chat_router)
 app.include_router(data_router)
+
+
+@app.get("/chat-ui", include_in_schema=False)
+def chat_ui():
+    return FileResponse("chat.html")

@@ -89,7 +89,7 @@ class LocalDriver(PersistenceDriver):
 
     def save_agent(self, agent: AgentRecord) -> None:
         sanitized = agent.model_copy(update={"name": sanitize_pii(agent.name)})
-        _write(self._agent_file(agent.agent_id), sanitized.model_dump())
+        _write(self._agent_file(agent.agent_id), sanitized.model_dump(mode="json"))
 
     def load_agent(self, agent_id: str) -> AgentRecord | None:
         data = _read(self._agent_file(agent_id))
@@ -103,7 +103,7 @@ class LocalDriver(PersistenceDriver):
     # ── Agent context ──────────────────────────────────────────────────────────
 
     def save_context(self, record: AgentContextRecord) -> None:
-        data = record.model_dump()
+        data = record.model_dump(mode="json")
         _write(self._context_current(record.agent_id), data)
         _write(self._context_version(record.agent_id, record.version), data)
 
@@ -125,7 +125,7 @@ class LocalDriver(PersistenceDriver):
     # ── User context ───────────────────────────────────────────────────────────
 
     def save_user_context(self, record: UserContextRecord) -> None:
-        _write(self._user_file(record.agent_id, record.user_id), record.model_dump())
+        _write(self._user_file(record.agent_id, record.user_id), record.model_dump(mode="json"))
 
     def load_user_context(self, agent_id: str, user_id: str) -> UserContextRecord | None:
         data = _read(self._user_file(agent_id, user_id))
@@ -150,7 +150,7 @@ class LocalDriver(PersistenceDriver):
     # ── Session ────────────────────────────────────────────────────────────────
 
     def save_session(self, session: SessionRecord) -> None:
-        _write(self._session_file(session.agent_id, session.session_id), session.model_dump())
+        _write(self._session_file(session.agent_id, session.session_id), session.model_dump(mode="json"))
 
     def load_session(self, agent_id: str, session_id: str) -> SessionRecord | None:
         data = _read(self._session_file(agent_id, session_id))
@@ -176,7 +176,7 @@ class LocalDriver(PersistenceDriver):
     # ── Session history ────────────────────────────────────────────────────────
 
     def save_history(self, agent_id: str, session_id: str, messages: list[HistoryMessage]) -> None:
-        _write(self._history_file(agent_id, session_id), {"messages": [m.model_dump() for m in messages]})
+        _write(self._history_file(agent_id, session_id), {"messages": [m.model_dump(mode="json") for m in messages]})
 
     def load_history(self, agent_id: str, session_id: str) -> list[HistoryMessage]:
         data = _read(self._history_file(agent_id, session_id))
@@ -187,7 +187,7 @@ class LocalDriver(PersistenceDriver):
     # ── Scores ─────────────────────────────────────────────────────────────────
 
     def save_scores(self, agent_id: str, scores: ScoreData) -> None:
-        _write(self._scores_file(agent_id, scores.session_id), scores.model_dump())
+        _write(self._scores_file(agent_id, scores.session_id), scores.model_dump(mode="json"))
 
     def load_scores(self, agent_id: str, session_id: str) -> ScoreData | None:
         data = _read(self._scores_file(agent_id, session_id))
@@ -196,7 +196,7 @@ class LocalDriver(PersistenceDriver):
     # ── Insights ───────────────────────────────────────────────────────────────
 
     def save_insight(self, agent_id: str, insight: InsightRecord) -> None:
-        _write(self._insights_file(agent_id, insight.session_id), insight.model_dump())
+        _write(self._insights_file(agent_id, insight.session_id), insight.model_dump(mode="json"))
 
     def load_insight(self, agent_id: str, session_id: str) -> InsightRecord | None:
         data = _read(self._insights_file(agent_id, session_id))

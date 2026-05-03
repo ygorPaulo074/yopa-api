@@ -15,8 +15,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from src.core.auth import authenticate_agent
 from src.core.cache.client import CacheClient
 from src.core.persistence.factory import get_driver
-from src.core.schemas import SessionRecord
+from src.core.schemas import SessionRecord, UserContextRecord
 from src.services.ai_service import AIService
+from src.services.context_service import ContextService
+from src.services import quality_analyzer
 from .schemas import (
     ChatRequest, ChatResponse, SessionInfo, TokenUsage, Message, ConversationEntry,
     SessionEndResponse, SessionResolveResponse, SessionEscalateResponse,
@@ -112,7 +114,33 @@ def end_session(session_id: str, agent_id: str = Depends(authenticate_agent)):
     if history:
         driver.save_history(agent_id, session_id, history)
 
+    if meta.user_id and history:
+        _update_user_context(driver, agent_id, meta.user_id, history, now)
+
     return SessionEndResponse(session_id=session_id, ended_at=now)
+
+
+def _update_user_context(driver, agent_id: str, user_id: str, history, now: str) -> None:
+    lang = quality_analyzer.detect_dominant_language(history)
+    context_record = ContextService().load_context(agent_id)
+    segment = context_record.context.segment if context_record else None
+
+    existing = driver.load_user_context(agent_id, user_id)
+    if existing:
+        driver.save_user_context(existing.model_copy(update={
+            "language": lang or existing.language,
+            "segment": segment or existing.segment,
+            "updated_at": now,
+        }))
+    else:
+        driver.save_user_context(UserContextRecord(
+            user_id=user_id,
+            agent_id=agent_id,
+            language=lang,
+            segment=segment,
+            created_at=now,
+            updated_at=now,
+        ))
 
 
 @router.post("/{session_id}/resolve", response_model=SessionResolveResponse)
