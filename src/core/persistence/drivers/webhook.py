@@ -10,6 +10,7 @@ from src.core.persistence.base import PersistenceDriver
 from src.core.schemas import (
     AgentRecord,
     AgentContextRecord,
+    HistoryMessage,
     UserContextRecord,
     SessionRecord,
     InsightRecord,
@@ -73,6 +74,15 @@ class WebhookDriver(PersistenceDriver):
 
     def delete_session(self, agent_id: str, session_id: str) -> None:
         self._post({"type": "session", "action": "delete", "agent_id": agent_id, "session_id": session_id})
+
+    # ── Session history ────────────────────────────────────────────────────────
+
+    def save_history(self, agent_id: str, session_id: str, messages: list[HistoryMessage]) -> None:
+        self._post({"type": "history", "action": "save", "agent_id": agent_id, "session_id": session_id,
+                    "data": [m.model_dump() for m in messages]})
+
+    def load_history(self, agent_id: str, session_id: str) -> list[HistoryMessage]:
+        raise NotImplementedError("WebhookDriver não suporta leitura")
 
     # ── Scores ─────────────────────────────────────────────────────────────────
 

@@ -20,6 +20,7 @@ from src.core.persistence.base import PersistenceDriver
 from src.core.schemas import (
     AgentRecord,
     AgentContextRecord,
+    HistoryMessage,
     UserContextRecord,
     SessionRecord,
     InsightRecord,
@@ -80,6 +81,9 @@ class LocalDriver(PersistenceDriver):
 
     def _insights_file(self, agent_id: str, session_id: str) -> Path:
         return self._agent_dir(agent_id) / "chats" / session_id / "insights.json"
+
+    def _history_file(self, agent_id: str, session_id: str) -> Path:
+        return self._agent_dir(agent_id) / "chats" / session_id / "history.json"
 
     # ── Agent ──────────────────────────────────────────────────────────────────
 
@@ -168,6 +172,17 @@ class LocalDriver(PersistenceDriver):
         session_dir = self._agent_dir(agent_id) / "chats" / session_id
         if session_dir.exists():
             shutil.rmtree(session_dir)
+
+    # ── Session history ────────────────────────────────────────────────────────
+
+    def save_history(self, agent_id: str, session_id: str, messages: list[HistoryMessage]) -> None:
+        _write(self._history_file(agent_id, session_id), {"messages": [m.model_dump() for m in messages]})
+
+    def load_history(self, agent_id: str, session_id: str) -> list[HistoryMessage]:
+        data = _read(self._history_file(agent_id, session_id))
+        if not data:
+            return []
+        return [HistoryMessage.model_validate(m) for m in data.get("messages", [])]
 
     # ── Scores ─────────────────────────────────────────────────────────────────
 

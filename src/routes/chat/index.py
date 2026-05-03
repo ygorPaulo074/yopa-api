@@ -108,6 +108,10 @@ def end_session(session_id: str, agent_id: str = Depends(authenticate_agent)):
     if scores:
         driver.save_scores(agent_id, scores)
 
+    history = cache.get_history(session_id)
+    if history:
+        driver.save_history(agent_id, session_id, history)
+
     return SessionEndResponse(session_id=session_id, ended_at=now)
 
 

@@ -14,6 +14,7 @@ from abc import ABC, abstractmethod
 from src.core.schemas import (
     AgentRecord,
     AgentContextRecord,
+    HistoryMessage,
     UserContextRecord,
     SessionRecord,
     InsightRecord,
@@ -72,6 +73,14 @@ class PersistenceDriver(ABC):
 
     @abstractmethod
     def delete_session(self, agent_id: str, session_id: str) -> None: ...
+
+    # ── Session history ────────────────────────────────────────────────────────
+
+    @abstractmethod
+    def save_history(self, agent_id: str, session_id: str, messages: list[HistoryMessage]) -> None: ...
+
+    @abstractmethod
+    def load_history(self, agent_id: str, session_id: str) -> list[HistoryMessage]: ...
 
     # ── Scores ─────────────────────────────────────────────────────────────────
 

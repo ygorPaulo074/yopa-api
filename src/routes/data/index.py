@@ -63,6 +63,8 @@ def get_chat(session_id: str, agent_id: str = Depends(authenticate_agent)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
 
     history = CacheClient().get_history(session_id)
+    if not history:
+        history = driver.load_history(agent_id, session_id)
     conversation = [
         ConversationEntry(message=Message(
             id=m.message_id,
