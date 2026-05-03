@@ -1,14 +1,14 @@
 """
 Gerencia o versionamento de contexto dos agentes.
 Cada criação ou atualização persiste um AgentContextRecord com versão incrementada,
-registra os campos alterados em changes e mantém o XML sincronizado no Redis.
+registra os campos alterados em changes e mantém o system prompt sincronizado no Redis.
 """
 from datetime import datetime, timezone
 
 from src.core.persistence.factory import get_driver
 from src.core.persistence.base import PersistenceDriver
 from src.core.cache.client import CacheClient
-from src.core.context_builder import build_context_xml
+from src.core.context_builder import build_system_prompt
 from src.core.schemas import AgentContextBase, AgentContextRecord
 from src.routes.base_schemas import AgentContext
 
@@ -20,7 +20,7 @@ class ContextService:
         self.cache = CacheClient()
 
     def create_context(self, agent_id: str, context: AgentContext) -> None:
-        xml = build_context_xml(context)
+        system_prompt = build_system_prompt(context)
         record = AgentContextRecord(
             agent_id=agent_id,
             version=1,
@@ -29,7 +29,7 @@ class ContextService:
             updated_at=datetime.now(timezone.utc).isoformat(),
         )
         self.driver.save_context(record)
-        self.cache.set_context(agent_id, xml)
+        self.cache.set_context(agent_id, system_prompt)
 
     def update_context(self, agent_id: str, new_context: AgentContext) -> AgentContextRecord:
         current = self.driver.load_context(agent_id)
@@ -47,15 +47,15 @@ class ContextService:
         )
         self.driver.save_context(record)
 
-        xml = build_context_xml(new_context)
-        self.cache.set_context(agent_id, xml)
+        system_prompt = build_system_prompt(new_context)
+        self.cache.set_context(agent_id, system_prompt)
 
         return record
 
     def load_context(self, agent_id: str) -> AgentContextRecord | None:
         return self.driver.load_context(agent_id)
 
-    def load_context_xml(self, agent_id: str) -> str | None:
+    def load_system_prompt(self, agent_id: str) -> str | None:
         cached = self.cache.get_context(agent_id)
         if cached:
             return cached
@@ -65,9 +65,9 @@ class ContextService:
             return None
 
         context = AgentContext(**record.context.model_dump())
-        xml = build_context_xml(context)
-        self.cache.set_context(agent_id, xml)
-        return xml
+        system_prompt = build_system_prompt(context)
+        self.cache.set_context(agent_id, system_prompt)
+        return system_prompt
 
     def load_context_history(self, agent_id: str) -> list[AgentContextRecord]:
         return self.driver.load_context_history(agent_id)

@@ -29,7 +29,7 @@ class AIService:
         user_id: str | None,
         message: str,
     ) -> dict:
-        context_xml = self.context_service.load_context_xml(agent_id) or ""
+        system_prompt = self.context_service.load_system_prompt(agent_id) or ""
         history = self.cache.get_history(session_id)
 
         now = datetime.now(timezone.utc).isoformat()
@@ -48,7 +48,7 @@ class AIService:
         user_score = quality_analyzer.analyze(user_msg_id, "user", message, threshold)
 
         t0 = time.monotonic()
-        ai_response = self.ai_client.complete(system=context_xml, messages=history + [user_msg])
+        ai_response = self.ai_client.complete(system=system_prompt, messages=history + [user_msg])
         response_time_ms = int((time.monotonic() - t0) * 1000)
 
         reply_now = datetime.now(timezone.utc).isoformat()

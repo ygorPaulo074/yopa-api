@@ -27,8 +27,8 @@ class CacheClient:
     def get_context(self, agent_id: str) -> str | None:
         return self._redis.get(keys.context_key(agent_id))
 
-    def set_context(self, agent_id: str, context_xml: str) -> None:
-        self._redis.set(keys.context_key(agent_id), context_xml)
+    def set_context(self, agent_id: str, system_prompt: str) -> None:
+        self._redis.set(keys.context_key(agent_id), system_prompt)
 
     def invalidate_context(self, agent_id: str) -> None:
         self._redis.delete(keys.context_key(agent_id))

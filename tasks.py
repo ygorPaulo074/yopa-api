@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import sys
 import os
+import json
 
 ROOT = Path(__file__).resolve().parent
 
@@ -102,3 +103,52 @@ def docker_build(c):
         print("[docker-build] Dockerfile não encontrado. Execute 'invoke setup' e escolha Docker.")
         return
     c.run("docker build -t ai-chatbot .", pty=True)
+
+
+@task(help={"agent_id": "ID do agente (busca em data/agents/{id}/context/current.json)"})
+def prompt(c, agent_id):
+    """Imprime o system prompt atual de um agente a partir do driver local."""
+    sys.path.insert(0, str(ROOT))
+    from src.core.schemas import AgentContextRecord
+    from src.core.context_builder import build_system_prompt
+    from src.routes.base_schemas import AgentContext
+
+    data_path = _read_data_path()
+    context_file = data_path / "agents" / agent_id / "context" / "current.json"
+
+    if not context_file.exists():
+        print(f"[prompt] Contexto não encontrado: {context_file}")
+        sys.exit(1)
+
+    record = AgentContextRecord.model_validate_json(context_file.read_text())
+    context = AgentContext(**record.context.model_dump())
+    result = build_system_prompt(context)
+
+    print("\n" + "─" * 60)
+    print(f"  System prompt — agente: {agent_id}  (v{record.version})")
+    print("─" * 60)
+    print(result)
+    print("─" * 60 + "\n")
+
+
+@task(help={"file": "Caminho para JSON com campos do AgentContext (campos omitidos usam None)"})
+def prompt_preview(c, file):
+    """Imprime o system prompt a partir de um arquivo JSON de contexto."""
+    sys.path.insert(0, str(ROOT))
+    from src.core.context_builder import build_system_prompt
+    from src.routes.base_schemas import AgentContext
+
+    json_path = Path(file)
+    if not json_path.exists():
+        print(f"[prompt-preview] Arquivo não encontrado: {json_path}")
+        sys.exit(1)
+
+    data = json.loads(json_path.read_text())
+    context = AgentContext.model_validate(data)
+    result = build_system_prompt(context)
+
+    print("\n" + "─" * 60)
+    print(f"  System prompt preview — {json_path.name}")
+    print("─" * 60)
+    print(result)
+    print("─" * 60 + "\n")
