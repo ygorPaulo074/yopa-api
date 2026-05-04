@@ -12,7 +12,7 @@ Nunca deve ser importado por services ou routes — a camada de persistência
 import hmac
 import secrets
 import hashlib
-from typing import List, cast
+from typing import cast
 from fastapi import Security, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from loguru import logger
@@ -39,7 +39,7 @@ def sanitize_pii(text: str) -> str:
     if not text or not text.strip():
         return text
     try:
-        results = cast(List[AnonymizerRecognizerResult], _analyzer.analyze(text=text, language="pt"))
+        results = cast(list[AnonymizerRecognizerResult], _analyzer.analyze(text=text, language="pt"))
         if not results:
             return text
         anonymized = _anonymizer.anonymize(text=text, analyzer_results=results)

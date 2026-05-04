@@ -11,8 +11,6 @@ from src.tools.deployment_scripts import (
     generate_dockerfile,
     generate_docker_compose,
 )
-from typing import List
-
 DEPLOY_OPTIONS = {
     "1": "local",
     "2": "docker",
@@ -44,7 +42,7 @@ ANALYZER_LANGUAGE_OPTIONS = {
 
 
 class CORSConfig(BaseModel):
-    allowed_origins: List[HttpUrl]
+    allowed_origins: list[HttpUrl]
 
 
 def validate_api_key(api_key, model):

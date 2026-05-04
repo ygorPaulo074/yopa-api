@@ -1,10 +1,10 @@
 from pydantic import BaseModel
-from typing import List, Optional, Literal
+from typing import Literal
 
 
 class ChatRequest(BaseModel):
     session_id: str
-    user_id: Optional[str] = None
+    user_id: str | None = None
     message: str
 
 
@@ -29,8 +29,8 @@ class Message(BaseModel):
     content: str
     timestamp: str
     status: Literal["delivered", "pending", "failed", "escalated"]
-    tokens: Optional[int] = None
-    response_time_ms: Optional[int] = None
+    tokens: int | None = None
+    response_time_ms: int | None = None
 
 
 class ConversationEntry(BaseModel):
@@ -39,7 +39,7 @@ class ConversationEntry(BaseModel):
 
 class ChatResponse(BaseModel):
     session: SessionInfo
-    conversation: List[ConversationEntry]
+    conversation: list[ConversationEntry]
 
 
 # ── Lifecycle ────────────────────────────────────────────────

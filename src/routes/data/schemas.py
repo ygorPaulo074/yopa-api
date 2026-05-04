@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict, Field
-from typing import List, Optional, Literal, Dict, Any
+from typing import Literal, Any
 from ..base_schemas import AgentContextBase
 from ..chat.schemas import ConversationEntry
 
@@ -10,7 +10,7 @@ class ChatSummary(BaseModel):
     session_id: str
     agent_id: str
     started_at: str
-    ended_at: Optional[str] = None
+    ended_at: str | None = None
     total_messages: int
     total_tokens: int
     resolved: bool
@@ -19,7 +19,7 @@ class ChatSummary(BaseModel):
 
 class ChatListResponse(BaseModel):
     total: int
-    chats: List[ChatSummary]
+    chats: list[ChatSummary]
 
 
 # ── /data/chat/{session_id} ──────────────────────────────────
@@ -30,7 +30,7 @@ class SessionDetail(ChatSummary):
 
 class ChatDetailResponse(BaseModel):
     session: SessionDetail
-    conversation: List[ConversationEntry]
+    conversation: list[ConversationEntry]
 
 
 # ── Insights ─────────────────────────────────────────────────
@@ -43,7 +43,7 @@ class SentimentPoint(BaseModel):
 class SentimentData(BaseModel):
     score: float
     label: Literal["positive", "neutral", "negative"]
-    progression: List[SentimentPoint]
+    progression: list[SentimentPoint]
 
 
 class SentimentInsightResponse(BaseModel):
@@ -52,9 +52,9 @@ class SentimentInsightResponse(BaseModel):
 
 
 class TopicsData(BaseModel):
-    detected: List[str]
+    detected: list[str]
     main_topic: str
-    intent: Optional[str] = None
+    intent: str | None = None
 
 
 class TopicsInsightResponse(BaseModel):
@@ -67,7 +67,7 @@ class MetricsData(BaseModel):
     total_tokens: int
     avg_user_message_length: float
     avg_response_time_ms: float
-    time_to_escalation_seconds: Optional[int] = None
+    time_to_escalation_seconds: int | None = None
     resolution: Literal["resolved", "escalated", "open"]
 
 
@@ -77,8 +77,8 @@ class MetricsInsightResponse(BaseModel):
 
 
 class AIAnalysis(BaseModel):
-    key_points: List[str]
-    suggested_actions: List[str]
+    key_points: list[str]
+    suggested_actions: list[str]
     summary: str
 
 
@@ -90,8 +90,8 @@ class SuggestionsInsightResponse(BaseModel):
 
 class AgentContextSnapshot(BaseModel):
     version: int
-    tone: Optional[str] = None
-    segment: Optional[str] = None
+    tone: str | None = None
+    segment: str | None = None
 
 
 class FullInsightResponse(BaseModel):
@@ -109,9 +109,9 @@ class FullInsightResponse(BaseModel):
 # ── /data/context ─────────────────────────────────────────────
 
 class UserProfile(BaseModel):
-    segment: Optional[str] = None
-    language: Optional[str] = None
-    form_answers: Optional[Dict[str, Any]] = None
+    segment: str | None = None
+    language: str | None = None
+    form_answers: dict[str, Any] | None = None
 
 
 class UserContextSummary(BaseModel):
@@ -123,7 +123,7 @@ class UserContextSummary(BaseModel):
 
 class UserContextListResponse(BaseModel):
     total: int
-    contexts: List[UserContextSummary]
+    contexts: list[UserContextSummary]
 
 
 class UserContextResponse(UserContextSummary):
@@ -135,7 +135,7 @@ class UserContextResponse(UserContextSummary):
 class TopicPattern(BaseModel):
     topic: str
     count: int
-    resolution_rate: Optional[float] = None
+    resolution_rate: float | None = None
 
 
 class PeakHour(BaseModel):
@@ -157,10 +157,10 @@ class AnalyticsSummary(BaseModel):
 
 
 class AnalyticsPatterns(BaseModel):
-    most_common_topics: List[TopicPattern]
-    most_common_unresolved_topics: List[TopicPattern]
-    peak_hours: List[PeakHour]
-    peak_days: List[str]
+    most_common_topics: list[TopicPattern]
+    most_common_unresolved_topics: list[TopicPattern]
+    peak_hours: list[PeakHour]
+    peak_days: list[str]
     avg_messages_to_resolution: float
     avg_messages_to_escalation: float
 
@@ -186,7 +186,7 @@ class AnalyticsUsers(BaseModel):
     new_users: int
     returning_users: int
     avg_chats_per_user: float
-    segments: List[UserSegment]
+    segments: list[UserSegment]
 
 
 class TimelineEntry(BaseModel):
@@ -202,8 +202,8 @@ class TimelineEntry(BaseModel):
 
 class AnalyticsPeriod(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
-    from_: Optional[str] = Field(None, alias="from")
-    to: Optional[str] = None
+    from_: str | None = Field(None, alias="from")
+    to: str | None = None
 
 
 class AnalyticsResponse(BaseModel):
@@ -213,7 +213,7 @@ class AnalyticsResponse(BaseModel):
     patterns: AnalyticsPatterns
     sentiment: AnalyticsSentiment
     users: AnalyticsUsers
-    timeline: List[TimelineEntry]
+    timeline: list[TimelineEntry]
 
 
 # ── Analytics sub-routes ──────────────────────────────────────
@@ -245,4 +245,4 @@ class AnalyticsUsersResponse(BaseModel):
 class AnalyticsTimelineResponse(BaseModel):
     generated_at: str
     period: AnalyticsPeriod
-    timeline: List[TimelineEntry]
+    timeline: list[TimelineEntry]

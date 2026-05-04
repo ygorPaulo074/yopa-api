@@ -18,7 +18,7 @@ CREATE TABLE agents (
     agent_id          VARCHAR(64)   PRIMARY KEY,
     name              VARCHAR(255)  NOT NULL,
     owner             VARCHAR(64)   NOT NULL,
-    api_key           VARCHAR(255)  NOT NULL UNIQUE,
+    api_key_hash      VARCHAR(64)   NOT NULL UNIQUE,
     tags              JSONB         NOT NULL DEFAULT '[]',
     created_at        TIMESTAMP     NOT NULL,
     updated_at        TIMESTAMP     NOT NULL,
@@ -28,20 +28,12 @@ CREATE TABLE agents (
 
 -- agent_contexts (one row per version; current = MAX(version))
 CREATE TABLE agent_contexts (
-    id                  SERIAL        PRIMARY KEY,
-    agent_id            VARCHAR(64)   NOT NULL REFERENCES agents(agent_id) ON DELETE CASCADE,
-    version             INTEGER       NOT NULL DEFAULT 1,
-    tone                VARCHAR(64)   CHECK (tone IN ('formal', 'informal', 'neutro')),
-    language            VARCHAR(16),
-    segment             VARCHAR(128),
-    persona             TEXT,
-    behavior            TEXT,
-    fallback_message    TEXT,
-    restrictions        JSONB,
-    knowledge_base      JSONB,
-    escalation_trigger  JSONB,
-    changes             JSONB,
-    updated_at          TIMESTAMP     NOT NULL,
+    id          SERIAL        PRIMARY KEY,
+    agent_id    VARCHAR(64)   NOT NULL REFERENCES agents(agent_id) ON DELETE CASCADE,
+    version     INTEGER       NOT NULL DEFAULT 1,
+    context     JSONB         NOT NULL DEFAULT '{}',
+    changes     JSONB         NOT NULL DEFAULT '[]',
+    updated_at  TIMESTAMP     NOT NULL,
     UNIQUE (agent_id, version)
 );
 
@@ -105,15 +97,27 @@ CREATE TABLE insights (
     summary           TEXT
 );
 
+-- knowledge_files (uploaded knowledge base files per agent)
+CREATE TABLE knowledge_files (
+    file_id     VARCHAR(64)   PRIMARY KEY,
+    agent_id    VARCHAR(64)   NOT NULL REFERENCES agents(agent_id) ON DELETE CASCADE,
+    filename    VARCHAR(255)  NOT NULL,
+    file_type   VARCHAR(16)   NOT NULL CHECK (file_type IN ('csv', 'json', 'pdf', 'excel')),
+    records     JSONB         NOT NULL DEFAULT '[]',
+    uploaded_at TIMESTAMP     NOT NULL,
+    updated_at  TIMESTAMP     NOT NULL
+);
+
 -- Indexes
-CREATE INDEX idx_agent_contexts_agent_id  ON agent_contexts(agent_id);
-CREATE INDEX idx_user_contexts_agent_id   ON user_contexts(agent_id);
-CREATE INDEX idx_user_contexts_user_id    ON user_contexts(user_id);
-CREATE INDEX idx_sessions_agent_id        ON sessions(agent_id);
-CREATE INDEX idx_sessions_user_id         ON sessions(user_id);
-CREATE INDEX idx_session_history_agent_id ON session_history(agent_id);
-CREATE INDEX idx_scores_agent_id          ON scores(agent_id);
-CREATE INDEX idx_insights_agent_id        ON insights(agent_id);
+CREATE INDEX idx_agent_contexts_agent_id   ON agent_contexts(agent_id);
+CREATE INDEX idx_user_contexts_agent_id    ON user_contexts(agent_id);
+CREATE INDEX idx_user_contexts_user_id     ON user_contexts(user_id);
+CREATE INDEX idx_sessions_agent_id         ON sessions(agent_id);
+CREATE INDEX idx_sessions_user_id          ON sessions(user_id);
+CREATE INDEX idx_session_history_agent_id  ON session_history(agent_id);
+CREATE INDEX idx_scores_agent_id           ON scores(agent_id);
+CREATE INDEX idx_insights_agent_id         ON insights(agent_id);
+CREATE INDEX idx_knowledge_files_agent_id  ON knowledge_files(agent_id);
 """
     os.makedirs("scripts", exist_ok=True)
     with open("scripts/schema.sql", "w") as f:
@@ -135,7 +139,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Tone           { formal informal neutro }
 enum Role           { user assistant }
 enum Status         { delivered pending failed escalated }
 enum SentimentLabel { positive neutral negative }
@@ -144,35 +147,28 @@ model Agent {
   agentId        String    @id @map("agent_id")
   name           String
   owner          String
-  apiKey         String    @unique @map("api_key")
+  apiKeyHash     String    @unique @map("api_key_hash")
   tags           Json      @default("[]")
   createdAt      DateTime  @map("created_at")
   updatedAt      DateTime  @map("updated_at")
   activeSince    DateTime? @map("active_since")
   lastActivityAt DateTime? @map("last_activity_at")
 
-  contexts     AgentContext[]
-  sessions     Session[]
-  userContexts UserContext[]
+  contexts       AgentContext[]
+  sessions       Session[]
+  userContexts   UserContext[]
+  knowledgeFiles KnowledgeFile[]
 
   @@map("agents")
 }
 
 model AgentContext {
-  id                Int      @id @default(autoincrement())
-  agentId           String   @map("agent_id")
-  version           Int      @default(1)
-  tone              Tone?
-  language          String?
-  segment           String?
-  persona           String?
-  behavior          String?
-  fallbackMessage   String?  @map("fallback_message")
-  restrictions      Json?
-  knowledgeBase     Json?    @map("knowledge_base")
-  escalationTrigger Json?    @map("escalation_trigger")
-  changes           Json?
-  updatedAt         DateTime @map("updated_at")
+  id        Int      @id @default(autoincrement())
+  agentId   String   @map("agent_id")
+  version   Int      @default(1)
+  context   Json     @default("{}")
+  changes   Json     @default("[]")
+  updatedAt DateTime @map("updated_at")
   agent Agent @relation(fields: [agentId], references: [agentId], onDelete: Cascade)
   @@unique([agentId, version])
   @@map("agent_contexts")
@@ -244,6 +240,18 @@ model Insight {
   summary          String?
   session Session @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
   @@map("insights")
+}
+
+model KnowledgeFile {
+  fileId     String   @id @map("file_id")
+  agentId    String   @map("agent_id")
+  filename   String
+  fileType   String   @map("file_type")
+  records    Json     @default("[]")
+  uploadedAt DateTime @map("uploaded_at")
+  updatedAt  DateTime @map("updated_at")
+  agent Agent @relation(fields: [agentId], references: [agentId], onDelete: Cascade)
+  @@map("knowledge_files")
 }
 """
     os.makedirs("scripts", exist_ok=True)

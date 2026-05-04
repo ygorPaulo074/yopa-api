@@ -5,7 +5,7 @@ Os schemas de rota (src/routes/*/schemas.py) são derivados destes ao montar res
 """
 
 from pydantic import BaseModel, HttpUrl
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 
 # ── Agent context base (compartilhado entre core e routes) ────────────────────
@@ -16,37 +16,37 @@ class FileReference(BaseModel):
 
 
 class RestrictionsConfig(BaseModel):
-    topics: List[str] = []
-    files: List[FileReference] = []
+    topics: list[str] = []
+    files: list[FileReference] = []
 
 
 class KnowledgeBaseConfig(BaseModel):
-    urls: List[HttpUrl] = []
-    files: List[FileReference] = []
+    urls: list[HttpUrl] = []
+    files: list[FileReference] = []
 
 
 class EscalationCondition(BaseModel):
     type: Literal["keyword", "sentiment", "message_count", "topic", "time_elapsed", "intent"]
-    value: Optional[str | int | float] = None
-    values: Optional[List[str]] = None
-    threshold: Optional[float] = None
+    value: str | int | float | None = None
+    values: list[str] | None = None
+    threshold: float | None = None
 
 
 class EscalationTrigger(BaseModel):
     operator: Literal["OR", "AND"]
-    conditions: List[EscalationCondition]
+    conditions: list[EscalationCondition]
 
 
 class AgentContextBase(BaseModel):
-    tone: Optional[Literal["formal", "informal", "neutro"]] = None
-    language: Optional[str] = None
-    segment: Optional[str] = None
-    persona: Optional[str] = None
-    behavior: Optional[str] = None
-    fallback_message: Optional[str] = None
-    restrictions: Optional[RestrictionsConfig] = None
-    knowledge_base: Optional[KnowledgeBaseConfig] = None
-    escalation_trigger: Optional[EscalationTrigger] = None
+    tone: Literal["formal", "informal", "neutro"] | None = None
+    language: str | None = None
+    segment: str | None = None
+    persona: str | None = None
+    behavior: str | None = None
+    fallback_message: str | None = None
+    restrictions: RestrictionsConfig | None = None
+    knowledge_base: KnowledgeBaseConfig | None = None
+    escalation_trigger: EscalationTrigger | None = None
 
 
 # ── Cache: session history ────────────────────────────────────────────────────
@@ -58,8 +58,8 @@ class HistoryMessage(BaseModel):
     content: str
     timestamp: str
     status: Literal["delivered", "pending", "failed", "escalated"]
-    tokens: Optional[int] = None
-    response_time_ms: Optional[int] = None
+    tokens: int | None = None
+    response_time_ms: int | None = None
 
 
 # ── Cache: session metadata ───────────────────────────────────────────────────
@@ -67,10 +67,10 @@ class HistoryMessage(BaseModel):
 class SessionMeta(BaseModel):
     session_id: str
     agent_id: str
-    user_id: Optional[str] = None
+    user_id: str | None = None
     model: str
     started_at: str
-    ended_at: Optional[str] = None
+    ended_at: str | None = None
     total_messages: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
@@ -84,22 +84,22 @@ class SessionMeta(BaseModel):
 class MessageScore(BaseModel):
     message_id: str
     role: Literal["user", "assistant"]
-    text_length: Optional[int] = None
-    sentiment_score: Optional[float] = None
-    sentiment_label: Optional[Literal["positive", "neutral", "negative"]] = None
-    topics: Optional[List[str]] = None
-    intent: Optional[str] = None
+    text_length: int | None = None
+    sentiment_score: float | None = None
+    sentiment_label: Literal["positive", "neutral", "negative"] | None = None
+    topics: list[str] | None = None
+    intent: str | None = None
 
 
 class ScoreData(BaseModel):
     session_id: str
-    messages: List[MessageScore] = []
-    avg_sentiment_score: Optional[float] = None
-    sentiment_label: Optional[Literal["positive", "neutral", "negative"]] = None
-    all_topics: List[str] = []
-    main_topic: Optional[str] = None
-    intent: Optional[str] = None
-    avg_user_message_length: Optional[float] = None
+    messages: list[MessageScore] = []
+    avg_sentiment_score: float | None = None
+    sentiment_label: Literal["positive", "neutral", "negative"] | None = None
+    all_topics: list[str] = []
+    main_topic: str | None = None
+    intent: str | None = None
+    avg_user_message_length: float | None = None
     updated_at: str
 
 
@@ -110,11 +110,11 @@ class AgentRecord(BaseModel):
     name: str
     owner: str
     api_key_hash: str
-    tags: List[str] = []
+    tags: list[str] = []
     created_at: str
     updated_at: str
-    active_since: Optional[str] = None
-    last_activity_at: Optional[str] = None
+    active_since: str | None = None
+    last_activity_at: str | None = None
 
 
 # ── Persistence: agent context (versioned) ────────────────────────────────────
@@ -123,7 +123,7 @@ class AgentContextRecord(BaseModel):
     agent_id: str
     version: int
     context: AgentContextBase
-    changes: List[str] = []
+    changes: list[str] = []
     updated_at: str
 
 
@@ -132,9 +132,9 @@ class AgentContextRecord(BaseModel):
 class UserContextRecord(BaseModel):
     user_id: str
     agent_id: str
-    segment: Optional[str] = None
-    language: Optional[str] = None
-    form_answers: Optional[Dict[str, Any]] = None
+    segment: str | None = None
+    language: str | None = None
+    form_answers: dict[str, Any] | None = None
     created_at: str
     updated_at: str
 
@@ -144,10 +144,10 @@ class UserContextRecord(BaseModel):
 class SessionRecord(BaseModel):
     session_id: str
     agent_id: str
-    user_id: Optional[str] = None
+    user_id: str | None = None
     model: str
     started_at: str
-    ended_at: Optional[str] = None
+    ended_at: str | None = None
     total_messages: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
@@ -161,8 +161,8 @@ class SessionRecord(BaseModel):
 class InsightRecord(BaseModel):
     session_id: str
     generated_at: str
-    key_points: List[str] = []
-    suggested_actions: List[str] = []
+    key_points: list[str] = []
+    suggested_actions: list[str] = []
     summary: str
 
 
@@ -173,6 +173,6 @@ class KnowledgeFileRecord(BaseModel):
     agent_id: str
     filename: str
     file_type: Literal["csv", "json", "pdf", "excel"]
-    records: List[Dict[str, Any]] = []
+    records: list[dict[str, Any]] = []
     uploaded_at: str
     updated_at: str

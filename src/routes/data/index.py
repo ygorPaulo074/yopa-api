@@ -4,7 +4,6 @@ Endpoints de dados e analytics.
 import json
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
@@ -344,7 +343,7 @@ def delete_context(user_id: str, agent_id: str = Depends(authenticate_agent)):
 
 # ── /data/analytics ────────────────────────────────────────────────────────────
 
-def _build_analytics(agent_id: str, from_: Optional[str], to: Optional[str]):
+def _build_analytics(agent_id: str, from_: str | None, to: str | None):
     driver = get_driver()
     sessions = driver.list_sessions(agent_id)
 
@@ -520,8 +519,8 @@ def _build_analytics(agent_id: str, from_: Optional[str], to: Optional[str]):
 @router.get("/analytics", response_model=AnalyticsResponse)
 def analytics_full(
     agent_id: str = Depends(authenticate_agent),
-    from_: Optional[str] = Query(None, alias="from"),
-    to: Optional[str] = None,
+    from_: str | None = Query(None, alias="from"),
+    to: str | None = None,
 ):
     data = _build_analytics(agent_id, from_, to)
     return AnalyticsResponse(**data)
@@ -530,8 +529,8 @@ def analytics_full(
 @router.get("/analytics/summary", response_model=AnalyticsSummaryResponse)
 def analytics_summary(
     agent_id: str = Depends(authenticate_agent),
-    from_: Optional[str] = Query(None, alias="from"),
-    to: Optional[str] = None,
+    from_: str | None = Query(None, alias="from"),
+    to: str | None = None,
 ):
     data = _build_analytics(agent_id, from_, to)
     return AnalyticsSummaryResponse(generated_at=data["generated_at"], period=data["period"], summary=data["summary"])
@@ -540,8 +539,8 @@ def analytics_summary(
 @router.get("/analytics/patterns", response_model=AnalyticsPatternsResponse)
 def analytics_patterns(
     agent_id: str = Depends(authenticate_agent),
-    from_: Optional[str] = Query(None, alias="from"),
-    to: Optional[str] = None,
+    from_: str | None = Query(None, alias="from"),
+    to: str | None = None,
 ):
     data = _build_analytics(agent_id, from_, to)
     return AnalyticsPatternsResponse(generated_at=data["generated_at"], period=data["period"], patterns=data["patterns"])
@@ -550,8 +549,8 @@ def analytics_patterns(
 @router.get("/analytics/sentiment", response_model=AnalyticsSentimentResponse)
 def analytics_sentiment(
     agent_id: str = Depends(authenticate_agent),
-    from_: Optional[str] = Query(None, alias="from"),
-    to: Optional[str] = None,
+    from_: str | None = Query(None, alias="from"),
+    to: str | None = None,
 ):
     data = _build_analytics(agent_id, from_, to)
     return AnalyticsSentimentResponse(generated_at=data["generated_at"], period=data["period"], sentiment=data["sentiment"])
@@ -560,8 +559,8 @@ def analytics_sentiment(
 @router.get("/analytics/users", response_model=AnalyticsUsersResponse)
 def analytics_users(
     agent_id: str = Depends(authenticate_agent),
-    from_: Optional[str] = Query(None, alias="from"),
-    to: Optional[str] = None,
+    from_: str | None = Query(None, alias="from"),
+    to: str | None = None,
 ):
     data = _build_analytics(agent_id, from_, to)
     return AnalyticsUsersResponse(generated_at=data["generated_at"], period=data["period"], users=data["users"])
@@ -570,8 +569,8 @@ def analytics_users(
 @router.get("/analytics/timeline", response_model=AnalyticsTimelineResponse)
 def analytics_timeline(
     agent_id: str = Depends(authenticate_agent),
-    from_: Optional[str] = Query(None, alias="from"),
-    to: Optional[str] = None,
+    from_: str | None = Query(None, alias="from"),
+    to: str | None = None,
 ):
     data = _build_analytics(agent_id, from_, to)
     return AnalyticsTimelineResponse(generated_at=data["generated_at"], period=data["period"], timeline=data["timeline"])

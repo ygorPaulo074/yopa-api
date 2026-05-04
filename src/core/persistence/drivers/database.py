@@ -70,7 +70,10 @@ class DatabaseDriver(PersistenceDriver):
 
     def delete_agent(self, agent_id: str) -> None:
         with self._engine.begin() as conn:
-            for table in ("insights", "scores", "sessions", "user_contexts", "agent_contexts", "agents"):
+            for table in (
+                "insights", "scores", "session_history", "sessions",
+                "knowledge_files", "user_contexts", "agent_contexts", "agents",
+            ):
                 conn.execute(
                     text(f"DELETE FROM {table} WHERE agent_id = :id"),
                     {"id": agent_id},
