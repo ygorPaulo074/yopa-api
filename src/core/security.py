@@ -16,6 +16,7 @@ from typing import cast
 from fastapi import Security, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from loguru import logger
+from cryptography.fernet import Fernet, InvalidToken
 from presidio_analyzer import AnalyzerEngine
 from presidio_analyzer.nlp_engine import NlpEngineProvider
 from presidio_anonymizer import AnonymizerEngine
@@ -74,3 +75,57 @@ async def get_api_key(
             detail="API Key ausente",
         )
     return credentials.credentials
+
+
+# ── Credential encryption (SQL datasource) ────────────────────────────────────
+
+_ENC_PREFIX = "enc:"
+_fernet_instance: Fernet | None = None
+
+
+def _get_fernet() -> Fernet:
+    global _fernet_instance
+    if _fernet_instance is not None:
+        return _fernet_instance
+    from src.infrastructure.config import settings
+    key = settings.SQL_ENCRYPTION_KEY
+    if not key:
+        # Gera chave efêmera — conexões SQL não podem ser reutilizadas entre restarts sem persistir a chave
+        logger.warning("SQL_ENCRYPTION_KEY não configurada — usando chave efêmera (não persistente).")
+        key = Fernet.generate_key().decode()
+    _fernet_instance = Fernet(key.encode() if isinstance(key, str) else key)
+    return _fernet_instance
+
+
+def encrypt_secret(plaintext: str) -> str:
+    """Criptografa um secret (ex: connection string). Retorna string com prefixo 'enc:'."""
+    if plaintext.startswith(_ENC_PREFIX):
+        return plaintext  # já criptografado
+    token = _get_fernet().encrypt(plaintext.encode()).decode()
+    return f"{_ENC_PREFIX}{token}"
+
+
+def decrypt_secret(ciphertext: str) -> str:
+    """Descriptografa um secret criptografado por encrypt_secret."""
+    if not ciphertext.startswith(_ENC_PREFIX):
+        return ciphertext  # plaintext (compatibilidade)
+    try:
+        return _get_fernet().decrypt(ciphertext[len(_ENC_PREFIX):].encode()).decode()
+    except InvalidToken as exc:
+        raise ValueError("Falha ao descriptografar credencial — chave inválida ou dado corrompido.") from exc
+
+
+def mask_connection_string(conn_str: str) -> str:
+    """Retorna a connection string com a senha mascarada para exibição na API."""
+    if conn_str.startswith(_ENC_PREFIX):
+        return "[criptografado]"
+    try:
+        from urllib.parse import urlparse, urlunparse
+        parsed = urlparse(conn_str)
+        if parsed.password:
+            netloc = parsed.netloc.replace(f":{parsed.password}@", ":***@")
+            masked = urlunparse(parsed._replace(netloc=netloc))
+            return masked
+    except Exception:
+        pass
+    return conn_str

@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     DB_NAME: str = ""
     WEBHOOK_URL: str = ""
     ANALYZER_LANGUAGES: list[str] = ["en"]
+    SQL_ENCRYPTION_KEY: str = ""
+    SQL_ALLOWED_DIALECTS: list[str] = ["postgresql", "mysql", "sqlite"]
+    SQL_QUERY_TIMEOUT: int = 10
+    SQL_MAX_ROWS: int = 50
 
     model_config = SettingsConfigDict(env_file=".env")
 

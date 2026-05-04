@@ -16,6 +16,7 @@ from src.core.schemas import (
     InsightRecord,
     ScoreData,
     KnowledgeFileRecord,
+    AgentSkillRecord,
 )
 from src.core.security import sanitize_pii
 
@@ -116,3 +117,12 @@ class WebhookDriver(PersistenceDriver):
     def delete_knowledge_file(self, agent_id: str, file_id: str) -> None:
         self._post({"type": "knowledge_file", "action": "delete",
                     "agent_id": agent_id, "file_id": file_id})
+
+    # ── Agent skills ───────────────────────────────────────────────────────────
+
+    def save_skill(self, agent_id: str, record: AgentSkillRecord) -> None:
+        self._post({"type": "agent_skill", "action": "save", "agent_id": agent_id,
+                    "data": record.model_dump(mode="json")})
+
+    def load_skill(self, agent_id: str) -> AgentSkillRecord | None:
+        raise NotImplementedError("WebhookDriver não suporta leitura.")

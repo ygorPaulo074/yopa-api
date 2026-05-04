@@ -87,3 +87,22 @@ class KnowledgeFileListResponse(BaseModel):
 class KnowledgeFileDeleteResponse(BaseModel):
     file_id: str
     deleted: bool
+
+
+class ParseContextRequest(BaseModel):
+    text: str
+
+
+class ParseContextResponse(BaseModel):
+    context: AgentContextBase
+
+
+class ValidateSqlRequest(BaseModel):
+    connection_string: str
+
+
+class ValidateSqlResponse(BaseModel):
+    valid: bool
+    dialect: str | None = None
+    tables: list[str] = []
+    error: str | None = None

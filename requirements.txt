@@ -39,6 +39,7 @@ openpyxl
 # Banco de dados
 sqlalchemy
 psycopg2-binary
+sqlparse
 
 # HTTP (webhook driver)
 requests

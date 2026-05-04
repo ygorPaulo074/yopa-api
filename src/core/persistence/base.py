@@ -20,6 +20,7 @@ from src.core.schemas import (
     InsightRecord,
     ScoreData,
     KnowledgeFileRecord,
+    AgentSkillRecord,
 )
 
 
@@ -112,3 +113,11 @@ class PersistenceDriver(ABC):
 
     @abstractmethod
     def delete_knowledge_file(self, agent_id: str, file_id: str) -> None: ...
+
+    # ── Agent skills ───────────────────────────────────────────────────────────
+
+    @abstractmethod
+    def save_skill(self, agent_id: str, record: AgentSkillRecord) -> None: ...
+
+    @abstractmethod
+    def load_skill(self, agent_id: str) -> AgentSkillRecord | None: ...

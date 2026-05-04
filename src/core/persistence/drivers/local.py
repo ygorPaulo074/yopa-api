@@ -26,6 +26,7 @@ from src.core.schemas import (
     InsightRecord,
     ScoreData,
     KnowledgeFileRecord,
+    AgentSkillRecord,
 )
 from src.core.security import sanitize_pii
 
@@ -91,6 +92,12 @@ class LocalDriver(PersistenceDriver):
 
     def _knowledge_dir(self, agent_id: str) -> Path:
         return self._agent_dir(agent_id) / "knowledge"
+
+    def _skill_current(self, agent_id: str) -> Path:
+        return self._agent_dir(agent_id) / "skills" / "current.json"
+
+    def _skill_version(self, agent_id: str, version: int) -> Path:
+        return self._agent_dir(agent_id) / "skills" / f"v{version}.json"
 
     # ── Agent ──────────────────────────────────────────────────────────────────
 
@@ -233,3 +240,14 @@ class LocalDriver(PersistenceDriver):
         path = self._knowledge_file(agent_id, file_id)
         if path.exists():
             path.unlink()
+
+    # ── Agent skills ───────────────────────────────────────────────────────────
+
+    def save_skill(self, agent_id: str, record: AgentSkillRecord) -> None:
+        data = record.model_dump(mode="json")
+        _write(self._skill_current(agent_id), data)
+        _write(self._skill_version(agent_id, record.version), data)
+
+    def load_skill(self, agent_id: str) -> AgentSkillRecord | None:
+        data = _read(self._skill_current(agent_id))
+        return AgentSkillRecord.model_validate(data) if data else None

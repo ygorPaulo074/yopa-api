@@ -17,6 +17,7 @@ from src.core.schemas import (
     InsightRecord,
     ScoreData,
     KnowledgeFileRecord,
+    AgentSkillRecord,
 )
 from src.core.security import sanitize_pii
 
@@ -72,7 +73,7 @@ class DatabaseDriver(PersistenceDriver):
         with self._engine.begin() as conn:
             for table in (
                 "insights", "scores", "session_history", "sessions",
-                "knowledge_files", "user_contexts", "agent_contexts", "agents",
+                "knowledge_files", "agent_skills", "user_contexts", "agent_contexts", "agents",
             ):
                 conn.execute(
                     text(f"DELETE FROM {table} WHERE agent_id = :id"),
@@ -370,3 +371,32 @@ class DatabaseDriver(PersistenceDriver):
                 text("DELETE FROM knowledge_files WHERE agent_id = :agent_id AND file_id = :file_id"),
                 {"agent_id": agent_id, "file_id": file_id},
             )
+
+    # ── Agent skills ───────────────────────────────────────────────────────────
+
+    def save_skill(self, agent_id: str, record: AgentSkillRecord) -> None:
+        d = record.model_dump()
+        with self._engine.begin() as conn:
+            conn.execute(text("""
+                INSERT INTO agent_skills
+                    (agent_id, version, system_prompt, context_snapshot, compiled_at)
+                VALUES
+                    (:agent_id, :version, :system_prompt, :context_snapshot, :compiled_at)
+                ON CONFLICT (agent_id) DO UPDATE SET
+                    version          = EXCLUDED.version,
+                    system_prompt    = EXCLUDED.system_prompt,
+                    context_snapshot = EXCLUDED.context_snapshot,
+                    compiled_at      = EXCLUDED.compiled_at
+            """), {**d, "context_snapshot": _dumps(d["context_snapshot"])})
+
+    def load_skill(self, agent_id: str) -> AgentSkillRecord | None:
+        with self._engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT * FROM agent_skills WHERE agent_id = :id"),
+                {"id": agent_id},
+            ).fetchone()
+        if not row:
+            return None
+        d = dict(row._mapping)
+        d["context_snapshot"] = _loads(d["context_snapshot"]) or {}
+        return AgentSkillRecord.model_validate(d)

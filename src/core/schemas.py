@@ -25,6 +25,23 @@ class KnowledgeBaseConfig(BaseModel):
     files: list[FileReference] = []
 
 
+class ApiDatasourceConfig(BaseModel):
+    url: HttpUrl
+    token: str | None = None
+    query_param: str = "q"
+
+
+class WebhookDatasourceConfig(BaseModel):
+    url: HttpUrl
+    token: str | None = None
+
+
+class SqlDatasourceConfig(BaseModel):
+    connection_string: str          # armazenado criptografado (prefixo "enc:")
+    allowed_tables: list[str] = []  # vazio = todas as tabelas permitidas
+    max_rows: int = 50
+
+
 class EscalationCondition(BaseModel):
     type: Literal["keyword", "sentiment", "message_count", "topic", "time_elapsed", "intent"]
     value: str | int | float | None = None
@@ -47,6 +64,9 @@ class AgentContextBase(BaseModel):
     restrictions: RestrictionsConfig | None = None
     knowledge_base: KnowledgeBaseConfig | None = None
     escalation_trigger: EscalationTrigger | None = None
+    api_datasource: ApiDatasourceConfig | None = None
+    webhook_datasource: WebhookDatasourceConfig | None = None
+    sql_datasource: SqlDatasourceConfig | None = None
 
 
 # ── Cache: session history ────────────────────────────────────────────────────
@@ -176,3 +196,13 @@ class KnowledgeFileRecord(BaseModel):
     records: list[dict[str, Any]] = []
     uploaded_at: str
     updated_at: str
+
+
+# ── Persistence: compiled agent skill ────────────────────────────────────────
+
+class AgentSkillRecord(BaseModel):
+    agent_id: str
+    version: int
+    system_prompt: str
+    context_snapshot: dict[str, Any]
+    compiled_at: str
