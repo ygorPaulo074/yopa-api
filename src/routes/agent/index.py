@@ -13,12 +13,12 @@ import json
 import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
-from fastapi.responses import StreamingResponse
 
 from src.clients.ai_client import AIClient
 from src.core.auth import authenticate_agent
 from src.infrastructure.config import LIMITER, settings
 from src.core.ingestion.file_extractor import extract
+from src.core.ingestion.url_fetcher import fetch as fetch_url
 from src.core.persistence.factory import get_driver
 from src.core.schemas import KnowledgeFileRecord
 from src.services.agent_service import AgentService
@@ -30,6 +30,7 @@ from .schemas import (
     AgentMetricsResponse, AgentUpdateContextResponse, AgentDeleteResponse,
     KnowledgeFileUploadResponse, KnowledgeFileListResponse,
     KnowledgeFileItem, KnowledgeFileDeleteResponse,
+    KnowledgeFetchUrlRequest,
     ParseContextRequest, ParseContextResponse,
     ValidateSqlRequest, ValidateSqlResponse,
 )
@@ -130,6 +131,43 @@ async def upload_knowledge_file(
         file_id=file_id,
         filename=file.filename,
         file_type=file_type,
+        record_count=len(records),
+        uploaded_at=now,
+    )
+
+
+@router.post("/knowledge/fetch-url", response_model=KnowledgeFileUploadResponse, status_code=201)
+def fetch_knowledge_url(
+    body: KnowledgeFetchUrlRequest,
+    agent_id: str = Depends(authenticate_agent),
+):
+    try:
+        records = fetch_url(body.url)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+    if not records:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No content extracted from URL")
+
+    now = datetime.now(timezone.utc).isoformat()
+    file_id = str(uuid.uuid4())
+    hostname = body.url.split("/")[2] if "//" in body.url else body.url
+
+    record = KnowledgeFileRecord(
+        file_id=file_id,
+        agent_id=agent_id,
+        filename=hostname,
+        file_type="url",
+        records=records,
+        uploaded_at=now,
+        updated_at=now,
+    )
+    get_driver().save_knowledge_file(agent_id, record)
+
+    return KnowledgeFileUploadResponse(
+        file_id=file_id,
+        filename=hostname,
+        file_type="url",
         record_count=len(records),
         uploaded_at=now,
     )

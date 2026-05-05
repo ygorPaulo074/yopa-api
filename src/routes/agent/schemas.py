@@ -89,6 +89,10 @@ class KnowledgeFileDeleteResponse(BaseModel):
     deleted: bool
 
 
+class KnowledgeFetchUrlRequest(BaseModel):
+    url: str
+
+
 class ParseContextRequest(BaseModel):
     text: str
 

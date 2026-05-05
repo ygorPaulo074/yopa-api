@@ -791,3 +791,113 @@ class TestSoftDeletes:
         past = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
         result = get_driver().purge_deleted(before=past)
         assert result["agents_purged"] == 0
+
+
+class TestUrlFetcher:
+    """Testes para POST /agent/knowledge/fetch-url e url_fetcher.py"""
+
+    def test_fetch_url_html_returns_201(self, client, agent):
+        _, _, headers = agent
+        html = "<html><body><p>Parágrafo um.</p><p>Parágrafo dois.</p></body></html>"
+        with patch("src.core.ingestion.url_fetcher.httpx.Client") as mock_client_cls:
+            mock_resp = MagicMock()
+            mock_resp.headers = {"content-type": "text/html"}
+            mock_resp.text = html
+            mock_resp.raise_for_status = lambda: None
+            mock_client_cls.return_value.__enter__ = lambda s: mock_client_cls.return_value
+            mock_client_cls.return_value.__exit__ = MagicMock(return_value=False)
+            mock_client_cls.return_value.get = MagicMock(return_value=mock_resp)
+
+            resp = client.post("/agent/knowledge/fetch-url", headers=headers, json={"url": "https://example.com"})
+
+        assert resp.status_code == 201
+        body = resp.json()
+        assert body["file_type"] == "url"
+        assert body["record_count"] == 2
+        assert "file_id" in body
+
+    def test_fetch_url_rss_returns_records(self, client, agent):
+        _, _, headers = agent
+        rss = """<?xml version="1.0"?>
+        <rss version="2.0"><channel>
+          <item><title>Título A</title><description>Resumo A</description></item>
+          <item><title>Título B</title><description>Resumo B</description></item>
+        </channel></rss>"""
+        with patch("src.core.ingestion.url_fetcher.httpx.Client") as mock_client_cls:
+            mock_resp = MagicMock()
+            mock_resp.headers = {"content-type": "application/rss+xml"}
+            mock_resp.text = rss
+            mock_resp.raise_for_status = lambda: None
+            mock_client_cls.return_value.__enter__ = lambda s: mock_client_cls.return_value
+            mock_client_cls.return_value.__exit__ = MagicMock(return_value=False)
+            mock_client_cls.return_value.get = MagicMock(return_value=mock_resp)
+
+            resp = client.post("/agent/knowledge/fetch-url", headers=headers, json={"url": "https://example.com/feed.rss"})
+
+        assert resp.status_code == 201
+        assert resp.json()["record_count"] == 2
+
+    def test_fetch_url_http_error_returns_422(self, client, agent):
+        _, _, headers = agent
+        with patch("src.core.ingestion.url_fetcher.httpx.Client") as mock_client_cls:
+            mock_resp = MagicMock()
+            mock_resp.raise_for_status.side_effect = httpx.HTTPStatusError(
+                "404", request=MagicMock(), response=MagicMock()
+            )
+            mock_client_cls.return_value.__enter__ = lambda s: mock_client_cls.return_value
+            mock_client_cls.return_value.__exit__ = MagicMock(return_value=False)
+            mock_client_cls.return_value.get = MagicMock(return_value=mock_resp)
+
+            resp = client.post("/agent/knowledge/fetch-url", headers=headers, json={"url": "https://example.com/404"})
+
+        assert resp.status_code == 422
+
+    def test_fetch_url_empty_content_returns_422(self, client, agent):
+        _, _, headers = agent
+        with patch("src.core.ingestion.url_fetcher.httpx.Client") as mock_client_cls:
+            mock_resp = MagicMock()
+            mock_resp.headers = {"content-type": "text/html"}
+            mock_resp.text = "<html><body></body></html>"
+            mock_resp.raise_for_status = lambda: None
+            mock_client_cls.return_value.__enter__ = lambda s: mock_client_cls.return_value
+            mock_client_cls.return_value.__exit__ = MagicMock(return_value=False)
+            mock_client_cls.return_value.get = MagicMock(return_value=mock_resp)
+
+            resp = client.post("/agent/knowledge/fetch-url", headers=headers, json={"url": "https://example.com/empty"})
+
+        assert resp.status_code == 422
+
+    def test_fetch_url_filename_is_hostname(self, client, agent):
+        _, _, headers = agent
+        html = "<html><body><p>Conteúdo.</p></body></html>"
+        with patch("src.core.ingestion.url_fetcher.httpx.Client") as mock_client_cls:
+            mock_resp = MagicMock()
+            mock_resp.headers = {"content-type": "text/html"}
+            mock_resp.text = html
+            mock_resp.raise_for_status = lambda: None
+            mock_client_cls.return_value.__enter__ = lambda s: mock_client_cls.return_value
+            mock_client_cls.return_value.__exit__ = MagicMock(return_value=False)
+            mock_client_cls.return_value.get = MagicMock(return_value=mock_resp)
+
+            resp = client.post("/agent/knowledge/fetch-url", headers=headers, json={"url": "https://docs.example.com/page"})
+
+        assert resp.status_code == 201
+        assert resp.json()["filename"] == "docs.example.com"
+
+    def test_fetched_url_appears_in_knowledge_list(self, client, agent):
+        _, _, headers = agent
+        html = "<html><body><p>Texto indexado.</p></body></html>"
+        with patch("src.core.ingestion.url_fetcher.httpx.Client") as mock_client_cls:
+            mock_resp = MagicMock()
+            mock_resp.headers = {"content-type": "text/html"}
+            mock_resp.text = html
+            mock_resp.raise_for_status = lambda: None
+            mock_client_cls.return_value.__enter__ = lambda s: mock_client_cls.return_value
+            mock_client_cls.return_value.__exit__ = MagicMock(return_value=False)
+            mock_client_cls.return_value.get = MagicMock(return_value=mock_resp)
+
+            client.post("/agent/knowledge/fetch-url", headers=headers, json={"url": "https://lista.example.com"})
+
+        files = client.get("/agent/knowledge", headers=headers).json()["files"]
+        types = [f["file_type"] for f in files]
+        assert "url" in types

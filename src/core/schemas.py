@@ -210,7 +210,7 @@ class KnowledgeFileRecord(BaseModel):
     file_id: str
     agent_id: str
     filename: str
-    file_type: Literal["csv", "json", "pdf", "excel", "txt", "docx"]
+    file_type: Literal["csv", "json", "pdf", "excel", "txt", "docx", "url"]
     records: list[dict[str, Any]] = []
     uploaded_at: str
     updated_at: str
