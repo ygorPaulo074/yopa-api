@@ -35,13 +35,17 @@ presidio-anonymizer
 # Extração de texto de arquivos
 pdfplumber
 openpyxl
+python-docx
 
 # Banco de dados
 sqlalchemy
 psycopg2-binary
+sqlparse
 
-# HTTP (webhook driver)
+# HTTP (webhook driver + url_fetcher)
 requests
+beautifulsoup4
+feedparser
 
 # Logs
 loguru

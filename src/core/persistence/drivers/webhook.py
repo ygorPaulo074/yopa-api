@@ -16,6 +16,7 @@ from src.core.schemas import (
     InsightRecord,
     ScoreData,
     KnowledgeFileRecord,
+    AgentSkillRecord,
 )
 from src.core.security import sanitize_pii
 
@@ -93,6 +94,9 @@ class WebhookDriver(PersistenceDriver):
     def load_scores(self, agent_id: str, session_id: str) -> ScoreData | None:
         raise NotImplementedError("WebhookDriver não suporta leitura.")
 
+    def load_all_scores(self, agent_id: str) -> list[ScoreData]:
+        raise NotImplementedError("WebhookDriver não suporta leitura.")
+
     # ── Insights ───────────────────────────────────────────────────────────────
 
     def save_insight(self, agent_id: str, insight: InsightRecord) -> None:
@@ -116,3 +120,25 @@ class WebhookDriver(PersistenceDriver):
     def delete_knowledge_file(self, agent_id: str, file_id: str) -> None:
         self._post({"type": "knowledge_file", "action": "delete",
                     "agent_id": agent_id, "file_id": file_id})
+
+    # ── Agent skills ───────────────────────────────────────────────────────────
+
+    def save_skill(self, agent_id: str, record: AgentSkillRecord) -> None:
+        self._post({"type": "agent_skill", "action": "save", "agent_id": agent_id,
+                    "data": record.model_dump(mode="json")})
+
+    def load_skill(self, agent_id: str) -> AgentSkillRecord | None:
+        raise NotImplementedError("WebhookDriver não suporta leitura.")
+
+    # ── Soft delete purge ──────────────────────────────────────────────────────
+
+    def soft_delete_agent(self, agent_id: str, deleted_at: str) -> None:
+        self._post({"type": "agent", "action": "soft_delete",
+                    "agent_id": agent_id, "deleted_at": deleted_at})
+
+    def soft_delete_session(self, agent_id: str, session_id: str, deleted_at: str) -> None:
+        self._post({"type": "session", "action": "soft_delete",
+                    "agent_id": agent_id, "session_id": session_id, "deleted_at": deleted_at})
+
+    def purge_deleted(self, before: str) -> dict:
+        raise NotImplementedError("WebhookDriver não suporta purge.")

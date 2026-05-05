@@ -1,6 +1,6 @@
 """
 Extrai registros estruturados de arquivos enviados pelo cliente.
-Suporta CSV, Excel, JSON e PDF. Retorna lista de dicts para indexação.
+Suporta CSV, Excel, JSON, PDF, TXT e DOCX. Retorna lista de dicts para indexação.
 """
 import csv
 import io
@@ -18,6 +18,10 @@ def extract(content: bytes, filename: str) -> list[dict[str, Any]]:
         return _from_json(content)
     if ext == "pdf":
         return _from_pdf(content)
+    if ext == "txt":
+        return _from_txt(content)
+    if ext == "docx":
+        return _from_docx(content)
     raise ValueError(f"Unsupported file type: .{ext}")
 
 
@@ -49,6 +53,25 @@ def _from_json(content: bytes) -> list[dict[str, Any]]:
     if isinstance(data, dict):
         return [data]
     return [{"value": str(data)}]
+
+
+def _from_txt(content: bytes) -> list[dict[str, Any]]:
+    text = content.decode("utf-8-sig")
+    return [
+        {"text": paragraph.strip()}
+        for paragraph in text.split("\n\n")
+        if paragraph.strip()
+    ]
+
+
+def _from_docx(content: bytes) -> list[dict[str, Any]]:
+    from docx import Document
+    doc = Document(io.BytesIO(content))
+    return [
+        {"text": para.text.strip()}
+        for para in doc.paragraphs
+        if para.text.strip()
+    ]
 
 
 def _from_pdf(content: bytes) -> list[dict[str, Any]]:

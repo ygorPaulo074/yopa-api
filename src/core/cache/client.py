@@ -4,17 +4,26 @@ Centralizes access to agent context, session history, NLP scores and session
 metadata. Agent context has no fixed TTL — it is invalidated explicitly on
 PUT /agent/context. Sessions use a configurable TTL renewed on each message.
 """
-from redis import Redis
+from redis import ConnectionPool, Redis
 from redis.exceptions import RedisError
 from src.infrastructure.config import settings
 from src.core.schemas import HistoryMessage, SessionMeta, ScoreData
 from . import keys
 
+# Pool singleton — uma conexão por URL, compartilhada entre todas as instâncias de CacheClient
+_pools: dict[str, ConnectionPool] = {}
+
+
+def _get_pool(url: str) -> ConnectionPool:
+    if url not in _pools:
+        _pools[url] = ConnectionPool.from_url(url, decode_responses=True)
+    return _pools[url]
+
 
 class CacheClient:
 
     def __init__(self):
-        self._redis = Redis.from_url(settings.REDIS_URL, decode_responses=True)
+        self._redis = Redis(connection_pool=_get_pool(settings.REDIS_URL))
 
     def ping(self) -> bool:
         try:
@@ -54,7 +63,7 @@ class CacheClient:
         return ScoreData.model_validate_json(raw) if raw else None
 
     def set_scores(self, session_id: str, scores: ScoreData) -> None:
-        self._redis.set(keys.scores_key(session_id), scores.model_dump_json())
+        self._redis.set(keys.scores_key(session_id), scores.model_dump_json(), ex=settings.SESSION_TTL)
 
     # ── Session metadata ──────────────────────────────────────
 

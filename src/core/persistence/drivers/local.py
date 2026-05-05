@@ -26,6 +26,7 @@ from src.core.schemas import (
     InsightRecord,
     ScoreData,
     KnowledgeFileRecord,
+    AgentSkillRecord,
 )
 from src.core.security import sanitize_pii
 
@@ -92,6 +93,12 @@ class LocalDriver(PersistenceDriver):
     def _knowledge_dir(self, agent_id: str) -> Path:
         return self._agent_dir(agent_id) / "knowledge"
 
+    def _skill_current(self, agent_id: str) -> Path:
+        return self._agent_dir(agent_id) / "skills" / "current.json"
+
+    def _skill_version(self, agent_id: str, version: int) -> Path:
+        return self._agent_dir(agent_id) / "skills" / f"v{version}.json"
+
     # ── Agent ──────────────────────────────────────────────────────────────────
 
     def save_agent(self, agent: AgentRecord) -> None:
@@ -100,12 +107,21 @@ class LocalDriver(PersistenceDriver):
 
     def load_agent(self, agent_id: str) -> AgentRecord | None:
         data = _read(self._agent_file(agent_id))
-        return AgentRecord.model_validate(data) if data else None
+        if not data:
+            return None
+        record = AgentRecord.model_validate(data)
+        return None if record.deleted_at else record
 
     def delete_agent(self, agent_id: str) -> None:
         agent_dir = self._agent_dir(agent_id)
         if agent_dir.exists():
             shutil.rmtree(agent_dir)
+
+    def soft_delete_agent(self, agent_id: str, deleted_at: str) -> None:
+        data = _read(self._agent_file(agent_id))
+        if data:
+            data["deleted_at"] = deleted_at
+            _write(self._agent_file(agent_id), data)
 
     # ── Agent context ──────────────────────────────────────────────────────────
 
@@ -161,7 +177,10 @@ class LocalDriver(PersistenceDriver):
 
     def load_session(self, agent_id: str, session_id: str) -> SessionRecord | None:
         data = _read(self._session_file(agent_id, session_id))
-        return SessionRecord.model_validate(data) if data else None
+        if not data:
+            return None
+        record = SessionRecord.model_validate(data)
+        return None if record.deleted_at else record
 
     def list_sessions(self, agent_id: str) -> list[SessionRecord]:
         chats_dir = self._chats_dir(agent_id)
@@ -172,13 +191,22 @@ class LocalDriver(PersistenceDriver):
             if session_dir.is_dir():
                 data = _read(session_dir / "session.json")
                 if data:
-                    records.append(SessionRecord.model_validate(data))
+                    record = SessionRecord.model_validate(data)
+                    if not record.deleted_at:
+                        records.append(record)
         return records
 
     def delete_session(self, agent_id: str, session_id: str) -> None:
         session_dir = self._agent_dir(agent_id) / "chats" / session_id
         if session_dir.exists():
             shutil.rmtree(session_dir)
+
+    def soft_delete_session(self, agent_id: str, session_id: str, deleted_at: str) -> None:
+        path = self._session_file(agent_id, session_id)
+        data = _read(path)
+        if data:
+            data["deleted_at"] = deleted_at
+            _write(path, data)
 
     # ── Session history ────────────────────────────────────────────────────────
 
@@ -199,6 +227,18 @@ class LocalDriver(PersistenceDriver):
     def load_scores(self, agent_id: str, session_id: str) -> ScoreData | None:
         data = _read(self._scores_file(agent_id, session_id))
         return ScoreData.model_validate(data) if data else None
+
+    def load_all_scores(self, agent_id: str) -> list[ScoreData]:
+        chats_dir = self._chats_dir(agent_id)
+        if not chats_dir.exists():
+            return []
+        result = []
+        for session_dir in chats_dir.iterdir():
+            if session_dir.is_dir():
+                data = _read(session_dir / "scores.json")
+                if data:
+                    result.append(ScoreData.model_validate(data))
+        return result
 
     # ── Insights ───────────────────────────────────────────────────────────────
 
@@ -233,3 +273,47 @@ class LocalDriver(PersistenceDriver):
         path = self._knowledge_file(agent_id, file_id)
         if path.exists():
             path.unlink()
+
+    # ── Agent skills ───────────────────────────────────────────────────────────
+
+    def save_skill(self, agent_id: str, record: AgentSkillRecord) -> None:
+        data = record.model_dump(mode="json")
+        _write(self._skill_current(agent_id), data)
+        _write(self._skill_version(agent_id, record.version), data)
+
+    def load_skill(self, agent_id: str) -> AgentSkillRecord | None:
+        data = _read(self._skill_current(agent_id))
+        return AgentSkillRecord.model_validate(data) if data else None
+
+    # ── Soft delete purge ──────────────────────────────────────────────────────
+
+    def purge_deleted(self, before: str) -> dict:
+        agents_dir = self._base / "agents"
+        agents_purged = 0
+        sessions_purged = 0
+        if not agents_dir.exists():
+            return {"agents_purged": 0, "sessions_purged": 0}
+
+        for agent_dir in agents_dir.iterdir():
+            if not agent_dir.is_dir():
+                continue
+            agent_file = agent_dir / "agent.json"
+            data = _read(agent_file)
+            if data and data.get("deleted_at") and data["deleted_at"] < before:
+                shutil.rmtree(agent_dir)
+                agents_purged += 1
+                continue
+
+            # Purge soft-deleted sessions of surviving agents
+            chats_dir = agent_dir / "chats"
+            if not chats_dir.exists():
+                continue
+            for session_dir in chats_dir.iterdir():
+                if not session_dir.is_dir():
+                    continue
+                session_data = _read(session_dir / "session.json")
+                if session_data and session_data.get("deleted_at") and session_data["deleted_at"] < before:
+                    shutil.rmtree(session_dir)
+                    sessions_purged += 1
+
+        return {"agents_purged": agents_purged, "sessions_purged": sessions_purged}

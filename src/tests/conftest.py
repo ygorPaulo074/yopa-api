@@ -55,6 +55,13 @@ def patch_env(fake_redis_server, monkeypatch, tmp_path):
     from src.infrastructure.config import settings
     monkeypatch.setattr(settings, "DATA_PATH", str(tmp_path))
 
+    # Reseta contadores do rate limiter entre testes para evitar falsos 429
+    from src.infrastructure.config import LIMITER
+    try:
+        LIMITER._storage.clear()
+    except Exception:
+        pass
+
 
 @pytest.fixture
 def mock_ai():

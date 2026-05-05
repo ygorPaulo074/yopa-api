@@ -68,5 +68,6 @@ class AgentService:
         }
 
     def delete_agent(self, agent_id: str) -> None:
-        self.driver.delete_agent(agent_id)
+        now = datetime.now(timezone.utc).isoformat()
+        self.driver.soft_delete_agent(agent_id, now)
         self.cache.invalidate_context(agent_id)

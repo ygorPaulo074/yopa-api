@@ -20,6 +20,7 @@ from src.core.schemas import (
     InsightRecord,
     ScoreData,
     KnowledgeFileRecord,
+    AgentSkillRecord,
 )
 
 
@@ -35,6 +36,9 @@ class PersistenceDriver(ABC):
 
     @abstractmethod
     def delete_agent(self, agent_id: str) -> None: ...
+
+    @abstractmethod
+    def soft_delete_agent(self, agent_id: str, deleted_at: str) -> None: ...
 
     # ── Agent context ──────────────────────────────────────────────────────────
 
@@ -75,6 +79,9 @@ class PersistenceDriver(ABC):
     @abstractmethod
     def delete_session(self, agent_id: str, session_id: str) -> None: ...
 
+    @abstractmethod
+    def soft_delete_session(self, agent_id: str, session_id: str, deleted_at: str) -> None: ...
+
     # ── Session history ────────────────────────────────────────────────────────
 
     @abstractmethod
@@ -90,6 +97,9 @@ class PersistenceDriver(ABC):
 
     @abstractmethod
     def load_scores(self, agent_id: str, session_id: str) -> ScoreData | None: ...
+
+    @abstractmethod
+    def load_all_scores(self, agent_id: str) -> list[ScoreData]: ...
 
     # ── Insights ───────────────────────────────────────────────────────────────
 
@@ -112,3 +122,18 @@ class PersistenceDriver(ABC):
 
     @abstractmethod
     def delete_knowledge_file(self, agent_id: str, file_id: str) -> None: ...
+
+    # ── Agent skills ───────────────────────────────────────────────────────────
+
+    @abstractmethod
+    def save_skill(self, agent_id: str, record: AgentSkillRecord) -> None: ...
+
+    @abstractmethod
+    def load_skill(self, agent_id: str) -> AgentSkillRecord | None: ...
+
+    # ── Soft delete purge ──────────────────────────────────────────────────────
+
+    @abstractmethod
+    def purge_deleted(self, before: str) -> dict: ...
+    """Hard-deletes agents and sessions with deleted_at < before.
+    Returns {"agents_purged": int, "sessions_purged": int}."""

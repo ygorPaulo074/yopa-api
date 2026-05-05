@@ -152,3 +152,22 @@ def prompt_preview(c, file):
     print("─" * 60)
     print(result)
     print("─" * 60 + "\n")
+
+
+@task
+def purge(c, days=7):
+    """Remove definitivamente agentes e sessões soft-deletados há mais de N dias (padrão: 7)."""
+    import sys
+    sys.path.insert(0, str(ROOT))
+    _ensure_initialized()
+    from datetime import datetime, timezone, timedelta
+    from src.core.persistence.factory import get_driver
+
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=int(days))).isoformat()
+    try:
+        result = get_driver().purge_deleted(before=cutoff)
+        print(f"[purge] Agentes removidos definitivamente: {result['agents_purged']}")
+        print(f"[purge] Sessões removidas definitivamente:  {result['sessions_purged']}")
+    except NotImplementedError:
+        print("[purge] Driver atual não suporta purge.", file=sys.stderr)
+        sys.exit(1)

@@ -25,6 +25,23 @@ class KnowledgeBaseConfig(BaseModel):
     files: list[FileReference] = []
 
 
+class ApiDatasourceConfig(BaseModel):
+    url: HttpUrl
+    token: str | None = None
+    query_param: str = "q"
+
+
+class WebhookDatasourceConfig(BaseModel):
+    url: HttpUrl
+    token: str | None = None
+
+
+class SqlDatasourceConfig(BaseModel):
+    connection_string: str          # armazenado criptografado (prefixo "enc:")
+    allowed_tables: list[str] = []  # vazio = todas as tabelas permitidas
+    max_rows: int = 50
+
+
 class EscalationCondition(BaseModel):
     type: Literal["keyword", "sentiment", "message_count", "topic", "time_elapsed", "intent"]
     value: str | int | float | None = None
@@ -37,6 +54,20 @@ class EscalationTrigger(BaseModel):
     conditions: list[EscalationCondition]
 
 
+class EscalationDestinationConfig(BaseModel):
+    type: Literal["webhook", "email", "github_issue", "queue", "none"] = "none"
+    # webhook
+    url: str | None = None
+    token: str | None = None
+    # email
+    address: str | None = None
+    # github_issue
+    repo: str | None = None          # "owner/repo"
+    github_token: str | None = None
+    # queue
+    queue_url: str | None = None
+
+
 class AgentContextBase(BaseModel):
     tone: Literal["formal", "informal", "neutro"] | None = None
     language: str | None = None
@@ -47,6 +78,10 @@ class AgentContextBase(BaseModel):
     restrictions: RestrictionsConfig | None = None
     knowledge_base: KnowledgeBaseConfig | None = None
     escalation_trigger: EscalationTrigger | None = None
+    escalation_destination: EscalationDestinationConfig | None = None
+    api_datasource: ApiDatasourceConfig | None = None
+    webhook_datasource: WebhookDatasourceConfig | None = None
+    sql_datasource: SqlDatasourceConfig | None = None
 
 
 # ── Cache: session history ────────────────────────────────────────────────────
@@ -100,6 +135,7 @@ class ScoreData(BaseModel):
     main_topic: str | None = None
     intent: str | None = None
     avg_user_message_length: float | None = None
+    avg_response_time_ms: float = 0.0
     updated_at: str
 
 
@@ -115,6 +151,7 @@ class AgentRecord(BaseModel):
     updated_at: str
     active_since: str | None = None
     last_activity_at: str | None = None
+    deleted_at: str | None = None
 
 
 # ── Persistence: agent context (versioned) ────────────────────────────────────
@@ -154,6 +191,7 @@ class SessionRecord(BaseModel):
     total_tokens: int = 0
     resolved: bool = False
     escalated: bool = False
+    deleted_at: str | None = None
 
 
 # ── Persistence: AI-generated insight ────────────────────────────────────────
@@ -172,7 +210,17 @@ class KnowledgeFileRecord(BaseModel):
     file_id: str
     agent_id: str
     filename: str
-    file_type: Literal["csv", "json", "pdf", "excel"]
+    file_type: Literal["csv", "json", "pdf", "excel", "txt", "docx", "url"]
     records: list[dict[str, Any]] = []
     uploaded_at: str
     updated_at: str
+
+
+# ── Persistence: compiled agent skill ────────────────────────────────────────
+
+class AgentSkillRecord(BaseModel):
+    agent_id: str
+    version: int
+    system_prompt: str
+    context_snapshot: dict[str, Any]
+    compiled_at: str

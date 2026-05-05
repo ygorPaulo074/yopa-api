@@ -7,13 +7,18 @@ Endpoints do agente:
   GET    /agent/metrics            — métricas agregadas de sessões e mensagens
   PUT    /agent/context            — atualiza contexto, incrementa versão, regenera XML
   DELETE /agent                    — remove agente, context.xml e todos os dados associados
+  POST   /agent/parse-context      — parseia texto livre em AgentContextBase via LLM
 """
+import json
 import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 
+from src.clients.ai_client import AIClient
 from src.core.auth import authenticate_agent
+from src.infrastructure.config import LIMITER, settings
 from src.core.ingestion.file_extractor import extract
+from src.core.ingestion.url_fetcher import fetch as fetch_url
 from src.core.persistence.factory import get_driver
 from src.core.schemas import KnowledgeFileRecord
 from src.services.agent_service import AgentService
@@ -25,6 +30,9 @@ from .schemas import (
     AgentMetricsResponse, AgentUpdateContextResponse, AgentDeleteResponse,
     KnowledgeFileUploadResponse, KnowledgeFileListResponse,
     KnowledgeFileItem, KnowledgeFileDeleteResponse,
+    KnowledgeFetchUrlRequest,
+    ParseContextRequest, ParseContextResponse,
+    ValidateSqlRequest, ValidateSqlResponse,
 )
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -128,6 +136,43 @@ async def upload_knowledge_file(
     )
 
 
+@router.post("/knowledge/fetch-url", response_model=KnowledgeFileUploadResponse, status_code=201)
+def fetch_knowledge_url(
+    body: KnowledgeFetchUrlRequest,
+    agent_id: str = Depends(authenticate_agent),
+):
+    try:
+        records = fetch_url(body.url)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+    if not records:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No content extracted from URL")
+
+    now = datetime.now(timezone.utc).isoformat()
+    file_id = str(uuid.uuid4())
+    hostname = body.url.split("/")[2] if "//" in body.url else body.url
+
+    record = KnowledgeFileRecord(
+        file_id=file_id,
+        agent_id=agent_id,
+        filename=hostname,
+        file_type="url",
+        records=records,
+        uploaded_at=now,
+        updated_at=now,
+    )
+    get_driver().save_knowledge_file(agent_id, record)
+
+    return KnowledgeFileUploadResponse(
+        file_id=file_id,
+        filename=hostname,
+        file_type="url",
+        record_count=len(records),
+        uploaded_at=now,
+    )
+
+
 @router.get("/knowledge", response_model=KnowledgeFileListResponse)
 def list_knowledge_files(agent_id: str = Depends(authenticate_agent)):
     files = get_driver().list_knowledge_files(agent_id)
@@ -152,3 +197,87 @@ def delete_knowledge_file(file_id: str, agent_id: str = Depends(authenticate_age
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
     driver.delete_knowledge_file(agent_id, file_id)
     return KnowledgeFileDeleteResponse(file_id=file_id, deleted=True)
+
+
+_PARSE_SYSTEM = """You are a JSON extractor. Given a free-text description of a chatbot agent,
+extract structured configuration. Return ONLY valid JSON — no markdown, no explanation.
+Omit fields not mentioned. Use these types:
+{
+  "tone": "formal" | "informal" | "neutro" | null,
+  "language": "<BCP-47 code>" | null,
+  "segment": "<business segment>" | null,
+  "persona": "<agent identity description>" | null,
+  "behavior": "<behavioral guidelines>" | null,
+  "fallback_message": "<default reply when out of scope>" | null,
+  "restrictions": {"topics": ["<topic>", ...]} | null,
+  "escalation_trigger": {
+    "operator": "OR" | "AND",
+    "conditions": [{
+      "type": "keyword" | "sentiment" | "message_count" | "topic" | "time_elapsed" | "intent",
+      "value": "<string or number>" | null,
+      "values": ["<string>", ...] | null,
+      "threshold": <number> | null
+    }]
+  } | null,
+  "escalation_destination": {
+    "type": "webhook" | "email" | "github_issue" | "queue" | "none",
+    "url": "<webhook URL>" | null,
+    "token": "<bearer token>" | null,
+    "address": "<email address>" | null,
+    "repo": "<owner/repo>" | null,
+    "github_token": "<GitHub token>" | null,
+    "queue_url": "<queue URL>" | null
+  } | null
+}"""
+
+
+@router.post("/validate-sql", response_model=ValidateSqlResponse)
+@LIMITER.limit(settings.RATE_LIMIT_VALIDATE_SQL)
+def validate_sql_connection(request: Request, body: ValidateSqlRequest):
+    from urllib.parse import urlparse
+    from src.core.tools.sql_tool import validate_connection_string
+    from sqlalchemy import create_engine, inspect
+
+    try:
+        validate_connection_string(body.connection_string)
+    except ValueError as e:
+        return ValidateSqlResponse(valid=False, error=str(e))
+
+    parsed = urlparse(body.connection_string)
+    dialect = parsed.scheme.split("+")[0].lower()
+
+    try:
+        engine = create_engine(body.connection_string, pool_pre_ping=True)
+        insp = inspect(engine)
+        tables = insp.get_table_names()
+        engine.dispose()
+        return ValidateSqlResponse(valid=True, dialect=dialect, tables=tables)
+    except Exception as e:
+        return ValidateSqlResponse(valid=False, dialect=dialect, error=str(e)[:200])
+
+
+@router.post("/parse-context", response_model=ParseContextResponse)
+@LIMITER.limit(settings.RATE_LIMIT_PARSE_CONTEXT)
+def parse_context_from_text(request: Request, body: ParseContextRequest):
+    from src.core.schemas import HistoryMessage
+    dummy_msg = HistoryMessage(
+        message_id="0", session_id="0", role="user",
+        content=body.text, timestamp="", status="delivered",
+    )
+    try:
+        response = AIClient().complete(
+            system=_PARSE_SYSTEM,
+            messages=[dummy_msg],
+            max_tokens=512,
+        )
+        parsed = json.loads(response.content)
+    except Exception:
+        raise HTTPException(status_code=422, detail="Não foi possível estruturar o texto fornecido.")
+
+    from src.core.schemas import AgentContextBase
+    try:
+        context = AgentContextBase.model_validate(parsed)
+    except Exception:
+        raise HTTPException(status_code=422, detail="Resposta da IA fora do formato esperado.")
+
+    return ParseContextResponse(context=context)

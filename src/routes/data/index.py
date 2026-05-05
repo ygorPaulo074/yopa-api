@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from src.core.auth import authenticate_agent
 from src.core.cache.client import CacheClient
 from src.core.persistence.factory import get_driver
-from src.core.schemas import InsightRecord
+from src.core.schemas import InsightRecord, HistoryMessage
 from src.infrastructure.config import settings
 from src.clients.ai_client import AIClient
 from src.routes.chat.schemas import Message, ConversationEntry
@@ -97,7 +97,8 @@ def delete_chat(session_id: str, agent_id: str = Depends(authenticate_agent)):
     session = driver.load_session(agent_id, session_id)
     if not session:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
-    driver.delete_session(agent_id, session_id)
+    now = datetime.now(timezone.utc).isoformat()
+    driver.soft_delete_session(agent_id, session_id, now)
     CacheClient().delete_session(session_id)
 
 
@@ -188,23 +189,22 @@ def insight_metrics(session_id: str, agent_id: str = Depends(authenticate_agent)
     )
 
 
-def _call_ai_for_insight(history_text: str, mode: str = "full") -> dict:
-    prompt = (
-        f"Analyze the following chat transcript and respond in JSON only.\n\n"
-        f"Transcript:\n{history_text}\n\n"
+def _call_ai_for_insight(history_text: str) -> dict:
+    msg = HistoryMessage(
+        message_id="0",
+        session_id="0",
+        role="user",
+        content=(
+            f"Analyze the following chat transcript and respond in JSON only.\n\n"
+            f"Transcript:\n{history_text}\n\n"
+            'Return exactly: {"key_points": ["..."], "suggested_actions": ["..."], "summary": "..."}'
+        ),
+        timestamp="",
+        status="delivered",
     )
-    if mode == "suggestions":
-        prompt += (
-            'Return exactly: {"key_points": ["..."], "suggested_actions": ["..."], "summary": "..."}'
-        )
-    else:
-        prompt += (
-            'Return exactly: {"key_points": ["..."], "suggested_actions": ["..."], "summary": "..."}'
-        )
-
     response = AIClient().complete(
         system="You are an AI assistant that analyzes chat conversations and returns structured JSON insights.",
-        messages=[],
+        messages=[msg],
         max_tokens=512,
     )
     try:
@@ -220,7 +220,7 @@ def insight_suggestions(session_id: str, agent_id: str = Depends(authenticate_ag
     _require_session(agent_id, session_id)
     history = CacheClient().get_history(session_id)
     history_text = "\n".join(f"{m.role.upper()}: {m.content}" for m in history)
-    ai_data = _call_ai_for_insight(history_text, "suggestions")
+    ai_data = _call_ai_for_insight(history_text)
     now = datetime.now(timezone.utc).isoformat()
     return SuggestionsInsightResponse(
         session_id=session_id,
@@ -396,21 +396,24 @@ def _build_analytics(agent_id: str, from_: str | None, to: str | None):
 
     avg_duration = round(sum(durations) / len(durations), 1) if durations else 0.0
 
-    # aggregate NLP scores
-    all_scores = []
+    # aggregate NLP scores — load_all_scores evita N+1 (1 query ao invés de 1 por sessão)
+    session_ids = {s.session_id for s in sessions}
+    resolved_map = {s.session_id: s.resolved for s in sessions}
+    all_scores = [sc for sc in driver.load_all_scores(agent_id) if sc.session_id in session_ids]
+
     topic_counts: Counter = Counter()
     unresolved_topic_counts: Counter = Counter()
-    for s in sessions:
-        sc = driver.load_scores(agent_id, s.session_id)
-        if sc:
-            all_scores.append(sc)
-            for t in sc.all_topics:
-                topic_counts[t] += 1
-                if not s.resolved:
-                    unresolved_topic_counts[t] += 1
+    for sc in all_scores:
+        for t in sc.all_topics:
+            topic_counts[t] += 1
+            if not resolved_map.get(sc.session_id, True):
+                unresolved_topic_counts[t] += 1
 
     sentiment_values = [sc.avg_sentiment_score for sc in all_scores if sc.avg_sentiment_score is not None]
     avg_sentiment = round(sum(sentiment_values) / len(sentiment_values), 4) if sentiment_values else 0.0
+
+    rt_values = [sc.avg_response_time_ms for sc in all_scores if sc.avg_response_time_ms > 0]
+    avg_rt_global = round(sum(rt_values) / len(rt_values), 1) if rt_values else 0.0
 
     sentiment_labels = [sc.sentiment_label for sc in all_scores if sc.sentiment_label]
     label_counter = Counter(sentiment_labels)
@@ -440,7 +443,7 @@ def _build_analytics(agent_id: str, from_: str | None, to: str | None):
     escalated_msgs = [s.total_messages for s in sessions if s.escalated]
 
     # timeline by date
-    daily: dict = defaultdict(lambda: {"total_chats": 0, "resolved": 0, "escalated": 0, "users": set(), "tokens": 0, "rt": [], "sentiments": []})
+    daily: dict = defaultdict(lambda: {"total_chats": 0, "resolved": 0, "escalated": 0, "users": set(), "tokens": 0, "rt": [], "sentiments": [], "response_times": []})
     for s in sessions:
         try:
             date = datetime.fromisoformat(s.started_at).strftime("%Y-%m-%d")
@@ -459,6 +462,8 @@ def _build_analytics(agent_id: str, from_: str | None, to: str | None):
                 date = datetime.fromisoformat(sc.updated_at).strftime("%Y-%m-%d")
                 if sc.avg_sentiment_score is not None:
                     daily[date]["sentiments"].append(sc.avg_sentiment_score)
+                if sc.avg_response_time_ms > 0:
+                    daily[date]["response_times"].append(sc.avg_response_time_ms)
             except Exception:
                 pass
 
@@ -466,6 +471,7 @@ def _build_analytics(agent_id: str, from_: str | None, to: str | None):
     for date in sorted(daily.keys()):
         d = daily[date]
         sents = d["sentiments"]
+        rts = d["response_times"]
         timeline.append(TimelineEntry(
             date=date,
             total_chats=d["total_chats"],
@@ -473,7 +479,7 @@ def _build_analytics(agent_id: str, from_: str | None, to: str | None):
             escalated=d["escalated"],
             new_users=len(d["users"]),
             total_tokens=d["tokens"],
-            avg_response_time_ms=0.0,
+            avg_response_time_ms=round(sum(rts) / len(rts), 1) if rts else 0.0,
             avg_sentiment_score=round(sum(sents) / len(sents), 4) if sents else 0.0,
         ))
 
@@ -491,7 +497,7 @@ def _build_analytics(agent_id: str, from_: str | None, to: str | None):
             total_users=len(unique_users),
             avg_messages_per_chat=round(total_msgs / total, 1),
             avg_chat_duration_seconds=avg_duration,
-            avg_response_time_ms=0.0,
+            avg_response_time_ms=avg_rt_global,
             resolution_rate=round(resolved / total, 4),
             escalation_rate=round(escalated / total, 4),
             total_tokens_used=total_tokens,

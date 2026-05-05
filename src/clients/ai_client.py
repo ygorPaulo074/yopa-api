@@ -2,8 +2,8 @@
 Conexão e configuração com o modelo de IA via LiteLLM.
 Abstrai o provedor (Anthropic, OpenAI, Gemini, DeepSeek, Groq), gerencia
 API key, modelo e timeout. Expõe interface única de completion para o ai_service.
-Suporta tool use: se tools forem fornecidas, executa o loop de chamada até
-o modelo retornar uma resposta sem tool_calls (máximo 1 rodada de ferramentas).
+Suporta tool use: executa loop de chamadas até o modelo retornar resposta sem
+tool_calls ou atingir MAX_TOOL_ROUNDS (configurável em settings).
 """
 import json
 import litellm
@@ -57,8 +57,12 @@ class AIClient:
         total_input += raw_usage.prompt_tokens if raw_usage else 0
         total_output += raw_usage.completion_tokens if raw_usage else 0
 
-        tool_calls = getattr(response.choices[0].message, "tool_calls", None)
-        if tool_calls and tool_executor:
+        rounds = 0
+        while rounds < settings.MAX_TOOL_ROUNDS:
+            tool_calls = getattr(response.choices[0].message, "tool_calls", None)
+            if not tool_calls or not tool_executor:
+                break
+            rounds += 1
             litellm_messages.append(response.choices[0].message.model_dump(exclude_none=True))
             for tc in tool_calls:
                 args = json.loads(tc.function.arguments)
@@ -69,7 +73,6 @@ class AIClient:
                     "content": result,
                 })
             kwargs["messages"] = litellm_messages
-            kwargs.pop("tools", None)
             response = litellm.completion(**kwargs)
             raw_usage = getattr(response, "usage", None)
             total_input += raw_usage.prompt_tokens if raw_usage else 0
