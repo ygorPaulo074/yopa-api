@@ -1,19 +1,14 @@
 """
 Despacha escalações para o destino configurado em AgentContextBase.escalation_destination.
-
-Destinos implementados:
-  webhook      — POST JSON para a URL configurada
-  none         — não faz nada (comportamento padrão)
-
-Stubs (aceitos no schema, não implementados ainda):
-  email, github_issue, queue
+Destinos implementados: webhook. Stubs: email, github_issue, queue.
 """
 from datetime import datetime, timezone
 from typing import Literal
 
 import requests
 
-from src.core.schemas import AgentContextBase, HistoryMessage, SessionMeta
+from src.domain.agent import AgentContextBase
+from src.domain.conversation import HistoryMessage, SessionMeta
 
 
 def dispatch_escalation(
@@ -35,10 +30,7 @@ def dispatch_escalation(
         "user_id": meta.user_id,
         "reason": reason,
         "triggered_at": datetime.now(timezone.utc).isoformat(),
-        "last_messages": [
-            {"role": m.role, "content": m.content}
-            for m in history[-5:]
-        ],
+        "last_messages": [{"role": m.role, "content": m.content} for m in history[-5:]],
     }
 
     if dest.type == "webhook":

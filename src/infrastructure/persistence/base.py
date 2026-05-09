@@ -1,27 +1,16 @@
 """
 Contrato abstrato dos drivers de persistência (Strategy Pattern).
-Define a interface que Local, Database e Webhook devem implementar.
 Qualquer chamada de persistência nos services deve operar sobre este contrato,
 nunca sobre um driver concreto diretamente — permite trocar o storage via .env
 sem alterar a lógica de negócio.
-
-Segurança é responsabilidade dos drivers concretos:
-  - Sanitização de PII ocorre nos métodos save_* de cada driver
-  - Cada driver importa diretamente de src.core.security o que precisar
+Sanitização de PII e segurança são responsabilidade dos drivers concretos.
 """
-
 from abc import ABC, abstractmethod
-from src.core.schemas import (
-    AgentRecord,
-    AgentContextRecord,
-    HistoryMessage,
-    UserContextRecord,
-    SessionRecord,
-    InsightRecord,
-    ScoreData,
-    KnowledgeFileRecord,
-    AgentSkillRecord,
-)
+
+from src.domain.agent import AgentRecord, AgentContextRecord, AgentSkillRecord
+from src.domain.conversation import HistoryMessage, SessionRecord, ScoreData
+from src.domain.knowledge import KnowledgeFileRecord
+from src.domain.analytics import UserContextRecord, InsightRecord
 
 
 class PersistenceDriver(ABC):
@@ -135,5 +124,3 @@ class PersistenceDriver(ABC):
 
     @abstractmethod
     def purge_deleted(self, before: str) -> dict: ...
-    """Hard-deletes agents and sessions with deleted_at < before.
-    Returns {"agents_purged": int, "sessions_purged": int}."""

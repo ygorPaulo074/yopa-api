@@ -50,7 +50,7 @@ def _ensure_initialized() -> bool:
 @task
 def setup(c):
     """Executa o assistente de configuração interativo."""
-    c.run("python src/tools/setup.py", pty=True)
+    c.run("python tools/setup.py", pty=True)
 
 
 @task
@@ -109,9 +109,8 @@ def docker_build(c):
 def prompt(c, agent_id):
     """Imprime o system prompt atual de um agente a partir do driver local."""
     sys.path.insert(0, str(ROOT))
-    from src.core.schemas import AgentContextRecord
-    from src.core.context_builder import build_system_prompt
-    from src.routes.base_schemas import AgentContext
+    from src.domain.agent import AgentContextRecord
+    from src.application.context_builder import build_system_prompt
 
     data_path = _read_data_path()
     context_file = data_path / "agents" / agent_id / "context" / "current.json"
@@ -121,8 +120,7 @@ def prompt(c, agent_id):
         sys.exit(1)
 
     record = AgentContextRecord.model_validate_json(context_file.read_text())
-    context = AgentContext(**record.context.model_dump())
-    result = build_system_prompt(context)
+    result = build_system_prompt(record.context)
 
     print("\n" + "─" * 60)
     print(f"  System prompt — agente: {agent_id}  (v{record.version})")
@@ -135,8 +133,8 @@ def prompt(c, agent_id):
 def prompt_preview(c, file):
     """Imprime o system prompt a partir de um arquivo JSON de contexto."""
     sys.path.insert(0, str(ROOT))
-    from src.core.context_builder import build_system_prompt
-    from src.routes.base_schemas import AgentContext
+    from src.domain.agent import AgentContextBase
+    from src.application.context_builder import build_system_prompt
 
     json_path = Path(file)
     if not json_path.exists():
@@ -144,7 +142,7 @@ def prompt_preview(c, file):
         sys.exit(1)
 
     data = json.loads(json_path.read_text())
-    context = AgentContext.model_validate(data)
+    context = AgentContextBase.model_validate(data)
     result = build_system_prompt(context)
 
     print("\n" + "─" * 60)
@@ -161,7 +159,7 @@ def purge(c, days=7):
     sys.path.insert(0, str(ROOT))
     _ensure_initialized()
     from datetime import datetime, timezone, timedelta
-    from src.core.persistence.factory import get_driver
+    from src.infrastructure.persistence.factory import get_driver
 
     cutoff = (datetime.now(timezone.utc) - timedelta(days=int(days))).isoformat()
     try:

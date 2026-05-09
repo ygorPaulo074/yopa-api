@@ -20,10 +20,7 @@ TOOL_DEFINITION = {
         "parameters": {
             "type": "object",
             "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The search query in natural language",
-                }
+                "query": {"type": "string", "description": "The search query in natural language"}
             },
             "required": ["query"],
         },
@@ -35,12 +32,7 @@ _DEFAULT_TIMEOUT = 5.0
 
 class WebhookTool:
 
-    def __init__(
-        self,
-        url: str,
-        token: str | None = None,
-        timeout: float = _DEFAULT_TIMEOUT,
-    ):
+    def __init__(self, url: str, token: str | None = None, timeout: float = _DEFAULT_TIMEOUT):
         self._url = url
         self._token = token
         self._timeout = timeout
@@ -49,14 +41,8 @@ class WebhookTool:
         headers = {"Content-Type": "application/json"}
         if self._token:
             headers["Authorization"] = f"Bearer {self._token}"
-
         try:
-            response = httpx.post(
-                self._url,
-                json={"query": query},
-                headers=headers,
-                timeout=self._timeout,
-            )
+            response = httpx.post(self._url, json={"query": query}, headers=headers, timeout=self._timeout)
             response.raise_for_status()
         except httpx.TimeoutException as exc:
             raise TimeoutError(f"Webhook timeout after {self._timeout}s") from exc

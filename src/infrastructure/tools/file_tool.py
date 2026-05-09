@@ -1,6 +1,6 @@
 """
 Ferramenta de busca sobre arquivos indexados do agente (knowledge base).
-Registra a definição de tool para LiteLLM e executa busca por relevância simples.
+Executa busca por relevância simples (keyword matching) sobre os registros em memória.
 """
 from typing import Any
 
@@ -17,10 +17,7 @@ TOOL_DEFINITION = {
         "parameters": {
             "type": "object",
             "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The search query in natural language",
-                }
+                "query": {"type": "string", "description": "The search query in natural language"}
             },
             "required": ["query"],
         },
@@ -56,5 +53,4 @@ class FileTool:
         return "\n".join(lines)
 
     def execute(self, query: str) -> str:
-        results = self.search(query)
-        return self.format_results(results)
+        return self.format_results(self.search(query))

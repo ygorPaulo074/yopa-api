@@ -7,9 +7,9 @@ import os
 
 # ── SQL Schema ─────────────────────────────────────────────────────────────────
 
-def create_sql_scripts():
-    sql_script = """-- =============================================================
--- Chatbot API — Schema SQL
+def create_sql_scripts() -> None:
+    sql = """-- =============================================================
+-- AI-ChatBot — Schema SQL
 -- PostgreSQL 14+
 -- =============================================================
 
@@ -19,11 +19,14 @@ CREATE TABLE agents (
     name              VARCHAR(255)  NOT NULL,
     owner             VARCHAR(64)   NOT NULL,
     api_key_hash      VARCHAR(64)   NOT NULL UNIQUE,
-    tags              JSONB         NOT NULL DEFAULT '[]',
+    ai_model          VARCHAR(64),
+    ai_api_key        TEXT,
+    ai_validated      BOOLEAN       NOT NULL DEFAULT FALSE,
     created_at        TIMESTAMP     NOT NULL,
     updated_at        TIMESTAMP     NOT NULL,
     active_since      TIMESTAMP,
-    last_activity_at  TIMESTAMP
+    last_activity_at  TIMESTAMP,
+    deleted_at        TIMESTAMP
 );
 
 -- agent_contexts (one row per version; current = MAX(version))
@@ -63,10 +66,11 @@ CREATE TABLE sessions (
     output_tokens   INTEGER       NOT NULL DEFAULT 0,
     total_tokens    INTEGER       NOT NULL DEFAULT 0,
     resolved        BOOLEAN       NOT NULL DEFAULT FALSE,
-    escalated       BOOLEAN       NOT NULL DEFAULT FALSE
+    escalated       BOOLEAN       NOT NULL DEFAULT FALSE,
+    deleted_at      TIMESTAMP
 );
 
--- session_history (full message history, persisted on session end)
+-- session_history (persisted on session end)
 CREATE TABLE session_history (
     session_id  VARCHAR(64)  PRIMARY KEY REFERENCES sessions(session_id) ON DELETE CASCADE,
     agent_id    VARCHAR(64)  NOT NULL,
@@ -75,16 +79,17 @@ CREATE TABLE session_history (
 
 -- scores (NLP scores aggregated per session)
 CREATE TABLE scores (
-    session_id              VARCHAR(64)   PRIMARY KEY REFERENCES sessions(session_id) ON DELETE CASCADE,
-    agent_id                VARCHAR(64)   NOT NULL,
-    messages                JSONB         NOT NULL DEFAULT '[]',
-    avg_sentiment_score     FLOAT,
-    sentiment_label         VARCHAR(16)   CHECK (sentiment_label IN ('positive', 'neutral', 'negative')),
-    all_topics              JSONB,
-    main_topic              VARCHAR(255),
-    intent                  VARCHAR(128),
-    avg_user_message_length FLOAT,
-    updated_at              TIMESTAMP     NOT NULL
+    session_id               VARCHAR(64)   PRIMARY KEY REFERENCES sessions(session_id) ON DELETE CASCADE,
+    agent_id                 VARCHAR(64)   NOT NULL,
+    messages                 JSONB         NOT NULL DEFAULT '[]',
+    avg_sentiment_score      FLOAT,
+    sentiment_label          VARCHAR(16)   CHECK (sentiment_label IN ('positive', 'neutral', 'negative')),
+    all_topics               JSONB,
+    main_topic               VARCHAR(255),
+    intent                   VARCHAR(128),
+    avg_user_message_length  FLOAT,
+    avg_response_time_ms     FLOAT,
+    updated_at               TIMESTAMP     NOT NULL
 );
 
 -- insights (AI-generated, on demand)
@@ -102,7 +107,7 @@ CREATE TABLE knowledge_files (
     file_id     VARCHAR(64)   PRIMARY KEY,
     agent_id    VARCHAR(64)   NOT NULL REFERENCES agents(agent_id) ON DELETE CASCADE,
     filename    VARCHAR(255)  NOT NULL,
-    file_type   VARCHAR(16)   NOT NULL CHECK (file_type IN ('csv', 'json', 'pdf', 'excel')),
+    file_type   VARCHAR(16)   NOT NULL CHECK (file_type IN ('csv', 'json', 'pdf', 'excel', 'txt', 'docx', 'url')),
     records     JSONB         NOT NULL DEFAULT '[]',
     uploaded_at TIMESTAMP     NOT NULL,
     updated_at  TIMESTAMP     NOT NULL
@@ -114,21 +119,23 @@ CREATE INDEX idx_user_contexts_agent_id    ON user_contexts(agent_id);
 CREATE INDEX idx_user_contexts_user_id     ON user_contexts(user_id);
 CREATE INDEX idx_sessions_agent_id         ON sessions(agent_id);
 CREATE INDEX idx_sessions_user_id          ON sessions(user_id);
+CREATE INDEX idx_sessions_deleted_at       ON sessions(deleted_at);
 CREATE INDEX idx_session_history_agent_id  ON session_history(agent_id);
 CREATE INDEX idx_scores_agent_id           ON scores(agent_id);
 CREATE INDEX idx_insights_agent_id         ON insights(agent_id);
 CREATE INDEX idx_knowledge_files_agent_id  ON knowledge_files(agent_id);
+CREATE INDEX idx_agents_deleted_at         ON agents(deleted_at);
 """
     os.makedirs("scripts", exist_ok=True)
     with open("scripts/schema.sql", "w") as f:
-        f.write(sql_script)
-    print("  ✓ scripts/schema.sql generated.")
+        f.write(sql)
+    print("  ✓ scripts/schema.sql gerado.")
 
 
 # ── Prisma Schema ──────────────────────────────────────────────────────────────
 
-def create_prisma_migrate():
-    content = """// Chatbot API — Prisma Schema (PostgreSQL 14+)
+def create_prisma_migrate() -> None:
+    content = """// AI-ChatBot — Prisma Schema (PostgreSQL 14+)
 
 generator client {
   provider = "prisma-client-js"
@@ -139,8 +146,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role           { user assistant }
-enum Status         { delivered pending failed escalated }
 enum SentimentLabel { positive neutral negative }
 
 model Agent {
@@ -148,11 +153,14 @@ model Agent {
   name           String
   owner          String
   apiKeyHash     String    @unique @map("api_key_hash")
-  tags           Json      @default("[]")
+  aiModel        String?   @map("ai_model")
+  aiApiKey       String?   @map("ai_api_key")
+  aiValidated    Boolean   @default(false) @map("ai_validated")
   createdAt      DateTime  @map("created_at")
   updatedAt      DateTime  @map("updated_at")
   activeSince    DateTime? @map("active_since")
   lastActivityAt DateTime? @map("last_activity_at")
+  deletedAt      DateTime? @map("deleted_at")
 
   contexts       AgentContext[]
   sessions       Session[]
@@ -169,7 +177,8 @@ model AgentContext {
   context   Json     @default("{}")
   changes   Json     @default("[]")
   updatedAt DateTime @map("updated_at")
-  agent Agent @relation(fields: [agentId], references: [agentId], onDelete: Cascade)
+  agent     Agent    @relation(fields: [agentId], references: [agentId], onDelete: Cascade)
+
   @@unique([agentId, version])
   @@map("agent_contexts")
 }
@@ -183,7 +192,8 @@ model UserContext {
   segment     String?
   language    String?
   formAnswers Json?    @map("form_answers")
-  agent Agent @relation(fields: [agentId], references: [agentId], onDelete: Cascade)
+  agent       Agent    @relation(fields: [agentId], references: [agentId], onDelete: Cascade)
+
   @@unique([userId, agentId])
   @@map("user_contexts")
 }
@@ -201,10 +211,12 @@ model Session {
   totalTokens   Int       @default(0) @map("total_tokens")
   resolved      Boolean   @default(false)
   escalated     Boolean   @default(false)
-  agent   Agent          @relation(fields: [agentId], references: [agentId], onDelete: Cascade)
-  history SessionHistory?
-  scores  Score?
-  insight Insight?
+  deletedAt     DateTime? @map("deleted_at")
+  agent         Agent          @relation(fields: [agentId], references: [agentId], onDelete: Cascade)
+  history       SessionHistory?
+  scores        Score?
+  insight       Insight?
+
   @@map("sessions")
 }
 
@@ -212,22 +224,25 @@ model SessionHistory {
   sessionId String @id @map("session_id")
   agentId   String @map("agent_id")
   messages  Json   @default("[]")
-  session Session @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+  session   Session @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+
   @@map("session_history")
 }
 
 model Score {
-  sessionId            String          @id @map("session_id")
-  agentId              String          @map("agent_id")
-  messages             Json            @default("[]")
-  avgSentimentScore    Float?          @map("avg_sentiment_score")
-  sentimentLabel       SentimentLabel? @map("sentiment_label")
-  allTopics            Json?           @map("all_topics")
-  mainTopic            String?         @map("main_topic")
-  intent               String?
-  avgUserMessageLength Float?          @map("avg_user_message_length")
-  updatedAt            DateTime        @map("updated_at")
-  session Session @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+  sessionId              String          @id @map("session_id")
+  agentId                String          @map("agent_id")
+  messages               Json            @default("[]")
+  avgSentimentScore      Float?          @map("avg_sentiment_score")
+  sentimentLabel         SentimentLabel? @map("sentiment_label")
+  allTopics              Json?           @map("all_topics")
+  mainTopic              String?         @map("main_topic")
+  intent                 String?
+  avgUserMessageLength   Float?          @map("avg_user_message_length")
+  avgResponseTimeMs      Float?          @map("avg_response_time_ms")
+  updatedAt              DateTime        @map("updated_at")
+  session                Session         @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+
   @@map("scores")
 }
 
@@ -238,7 +253,8 @@ model Insight {
   keyPoints        Json?    @map("key_points")
   suggestedActions Json?    @map("suggested_actions")
   summary          String?
-  session Session @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+  session          Session  @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+
   @@map("insights")
 }
 
@@ -250,20 +266,21 @@ model KnowledgeFile {
   records    Json     @default("[]")
   uploadedAt DateTime @map("uploaded_at")
   updatedAt  DateTime @map("updated_at")
-  agent Agent @relation(fields: [agentId], references: [agentId], onDelete: Cascade)
+  agent      Agent    @relation(fields: [agentId], references: [agentId], onDelete: Cascade)
+
   @@map("knowledge_files")
 }
 """
     os.makedirs("scripts", exist_ok=True)
     with open("scripts/schema.prisma", "w") as f:
         f.write(content)
-    print("  ✓ scripts/schema.prisma generated.")
+    print("  ✓ scripts/schema.prisma gerado.")
 
 
 # ── Dockerfile ─────────────────────────────────────────────────────────────────
 
 def generate_dockerfile(port: str = "8000") -> None:
-    content = f"""FROM python:3.14-slim
+    content = f"""FROM python:3.12-slim
 
 WORKDIR /app
 
@@ -280,18 +297,17 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "{port}"]
 """
     with open("Dockerfile", "w") as f:
         f.write(content)
-    print("  ✓ Dockerfile generated.")
+    print("  ✓ Dockerfile gerado.")
 
 
 # ── Docker Compose ─────────────────────────────────────────────────────────────
 
-def generate_docker_compose(port: str = "8000", storage_type: str = "Local") -> None:
-    """API + Redis. Optionally adds PostgreSQL when storage_type is Database."""
+def generate_docker_compose(port: str = "8000", storage_type: str = "local") -> None:
     db_block = ""
     db_depends = ""
     db_volume = ""
 
-    if storage_type == "Database":
+    if storage_type == "database":
         db_block = """
   db:
     image: postgres:16-alpine
@@ -324,22 +340,16 @@ def generate_docker_compose(port: str = "8000", storage_type: str = "Local") -> 
     restart: unless-stopped
     volumes:
       - ./data:/app/data
-
+{db_block}
   redis:
     image: redis:7-alpine
     restart: unless-stopped
     volumes:
       - redis_data:/data
-{db_block}
+
 volumes:
   redis_data:
 {db_volume}"""
     with open("docker-compose.yml", "w") as f:
         f.write(content)
-    print("  ✓ docker-compose.yml generated.")
-
-
-# ── Backward compat aliases ────────────────────────────────────────────────────
-
-def create_docker_compose_with_db():
-    generate_docker_compose(storage_type="Database")
+    print("  ✓ docker-compose.yml gerado.")

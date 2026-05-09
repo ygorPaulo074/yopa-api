@@ -5,10 +5,10 @@ ou do Caddy (deploy self-hosted via docker-compose.selfhosted.yml).
 """
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
-from src.routes.agent.index import router as agent_router
-from src.routes.chat.index import router as chat_router
-from src.routes.data.index import router as data_router
-from src.routes.admin.index import router as admin_router
+from src.interfaces.http.routes.agent import router as agent_router
+from src.interfaces.http.routes.chat import router as chat_router
+from src.interfaces.http.routes.data import router as data_router
+from src.interfaces.http.routes.admin import router as admin_router
 
 app = FastAPI()
 
