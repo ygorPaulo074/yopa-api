@@ -1,23 +1,11 @@
 """
 Configurações globais da aplicação.
-Carrega variáveis de ambiente via Pydantic BaseSettings (pydantic-settings),
-instancia o rate limiter (slowapi) e expõe o objeto `settings` como ponto
-único de acesso às variáveis de ambiente em todo o projeto.
+Carrega variáveis de ambiente via Pydantic BaseSettings e expõe `settings` como ponto único de acesso.
+AUTH_MODE controla o mecanismo de autenticação: "standalone" usa Bearer {agent_id}.{secret};
+"internal" espera X-Internal-Token + X-Agent-Id injetados pelo Yopa Proxy.
 """
-import os
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-
-# Setup interativo só em development — em production o .env deve estar pré-configurado.
-if os.getenv("RUN_MODE", "development") == "development" and not os.path.exists(".initialized"):
-    print("\n[AI-ChatBot] Primeira execução detectada.")
-    print("  1. Executar assistente de configuração (src/tools/setup.py)")
-    print("  2. Configurar manualmente (.env.example → .env)\n")
-    choice = input("Opção [1]: ").strip() or "1"
-    if choice == "1":
-        from src.tools.setup import run_setup
-        run_setup()
 
 
 class Settings(BaseSettings):
@@ -29,7 +17,6 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     DATA_PATH: str = "./data"
-    ALLOWED_ORIGINS: list[str] = ["http://localhost"]
     LOG_LEVEL: str = "INFO"
     REDIS_URL: str = "redis://localhost:6379"
     SESSION_TTL: int = 86400
@@ -44,14 +31,20 @@ class Settings(BaseSettings):
     SQL_ALLOWED_DIALECTS: list[str] = ["postgresql", "mysql", "sqlite"]
     SQL_QUERY_TIMEOUT: int = 10
     SQL_MAX_ROWS: int = 50
-    RATE_LIMIT_CHAT: str = "60/minute"
-    RATE_LIMIT_PARSE_CONTEXT: str = "10/minute"
-    RATE_LIMIT_VALIDATE_SQL: str = "5/minute"
     MAX_TOOL_ROUNDS: int = 5
+    AUTH_MODE: str = "standalone"
+    INTERNAL_TOKEN: str = ""
 
-    model_config = SettingsConfigDict(env_file=".env")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @model_validator(mode="after")
+    def _check_internal_token(self) -> "Settings":
+        if self.AUTH_MODE == "internal" and not self.INTERNAL_TOKEN:
+            raise ValueError(
+                "AUTH_MODE=internal requires INTERNAL_TOKEN to be set. "
+                "Set INTERNAL_TOKEN in your .env or switch to AUTH_MODE=standalone."
+            )
+        return self
 
 
 settings = Settings()
-
-LIMITER = Limiter(key_func=get_remote_address)

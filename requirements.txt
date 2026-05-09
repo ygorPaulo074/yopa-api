@@ -14,9 +14,6 @@ pydantic
 pydantic-settings
 python-dotenv
 
-# Rate limiting
-slowapi
-
 # Análise local de conversas
 textblob
 spacy
