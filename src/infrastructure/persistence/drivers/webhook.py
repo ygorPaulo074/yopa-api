@@ -1,7 +1,7 @@
 """
-Driver de persistência unidirecional via HTTP.
-Despacha cada operação de escrita como POST para WEBHOOK_URL do .env.
-Operações de leitura (load_*, list_*) lançam NotImplementedError.
+Unidirectional HTTP persistence driver.
+Dispatches each write operation as a POST to WEBHOOK_URL from .env.
+Read operations (load_*, list_*) raise NotImplementedError.
 """
 import requests
 

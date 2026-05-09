@@ -1,7 +1,7 @@
 """
-Entry point da aplicação AI-ChatBot.
-Rate limiting e CORS são responsabilidade do Yopa Proxy (deploy integrado)
-ou do Caddy (deploy self-hosted via docker-compose.selfhosted.yml).
+AI-ChatBot application entry point.
+Rate limiting and CORS are handled by the Yopa Proxy (integrated deploy)
+or by Caddy (self-hosted deploy via docker-compose.selfhosted.yml).
 """
 from fastapi import FastAPI
 from fastapi.responses import FileResponse

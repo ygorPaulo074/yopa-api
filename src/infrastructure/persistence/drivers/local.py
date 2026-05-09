@@ -1,8 +1,8 @@
 """
-Driver de persistência em sistema de arquivos local.
-Armazena agentes, sessões e scores como arquivos JSON em DATA_PATH.
+Local filesystem persistence driver.
+Stores agents, sessions and scores as JSON files under DATA_PATH.
 
-Estrutura de diretórios:
+Directory layout:
   {DATA_PATH}/agents/{agent_id}/agent.json
   {DATA_PATH}/agents/{agent_id}/context/current.json
   {DATA_PATH}/agents/{agent_id}/context/history/v{n}.json

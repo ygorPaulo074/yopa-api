@@ -1,5 +1,5 @@
 """
-Wrapper — use preferencialmente: invoke test
+Compatibility wrapper — prefer: invoke test
 """
 import subprocess
 import sys

@@ -105,8 +105,10 @@ def delete_chat(session_id: str, agent_id: str = Depends(authenticate_agent)):
 
 # ── Insights ───────────────────────────────────────────────────────────────────
 
-def _require_scores(session_id: str):
+def _require_scores(agent_id: str, session_id: str):
     scores = CacheClient().get_scores(session_id)
+    if not scores:
+        scores = get_driver().load_scores(agent_id, session_id)
     if not scores:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No analysis data for this session")
     return scores
@@ -122,7 +124,7 @@ def _require_session(agent_id: str, session_id: str):
 @router.get("/chat/{session_id}/insights/sentiment", response_model=SentimentInsightResponse)
 def insight_sentiment(session_id: str, agent_id: str = Depends(authenticate_agent)):
     _require_session(agent_id, session_id)
-    scores = _require_scores(session_id)
+    scores = _require_scores(agent_id, session_id)
     progression = [
         SentimentPoint(message_id=m.message_id, score=m.sentiment_score or 0.0)
         for m in scores.messages
@@ -141,7 +143,7 @@ def insight_sentiment(session_id: str, agent_id: str = Depends(authenticate_agen
 @router.get("/chat/{session_id}/insights/topics", response_model=TopicsInsightResponse)
 def insight_topics(session_id: str, agent_id: str = Depends(authenticate_agent)):
     _require_session(agent_id, session_id)
-    scores = _require_scores(session_id)
+    scores = _require_scores(agent_id, session_id)
     return TopicsInsightResponse(
         session_id=session_id,
         topics=TopicsData(
@@ -233,7 +235,7 @@ def insight_suggestions(session_id: str, agent_id: str = Depends(authenticate_ag
 @router.get("/chat/{session_id}/insights", response_model=FullInsightResponse)
 def insight_full(session_id: str, agent_id: str = Depends(authenticate_agent)):
     session = _require_session(agent_id, session_id)
-    scores = _require_scores(session_id)
+    scores = _require_scores(agent_id, session_id)
     history = CacheClient().get_history(session_id)
     history_text = "\n".join(f"{m.role.upper()}: {m.content}" for m in history)
     ai_data = _call_ai_for_insight(history_text)
@@ -343,6 +345,23 @@ def delete_context(user_id: str, agent_id: str = Depends(authenticate_agent)):
 
 
 # ── /data/analytics ────────────────────────────────────────────────────────────
+
+def _build_segments(driver, agent_id: str, sessions, unique_users: set) -> list[UserSegment]:
+    user_contexts = driver.list_user_contexts(agent_id)
+    relevant = [uc for uc in user_contexts if uc.user_id in unique_users and uc.segment]
+    seg_counts: Counter = Counter(uc.segment for uc in relevant)
+    seg_users: dict[str, set] = {}
+    for uc in relevant:
+        seg_users.setdefault(uc.segment, set()).add(uc.user_id)
+    result = []
+    for seg, count in seg_counts.most_common():
+        seg_session_ids = {s.session_id for s in sessions if s.user_id in seg_users.get(seg, set())}
+        seg_sessions = [s for s in sessions if s.session_id in seg_session_ids]
+        resolved_count = sum(1 for s in seg_sessions if s.resolved)
+        resolution_rate = round(resolved_count / len(seg_sessions), 4) if seg_sessions else 0.0
+        result.append(UserSegment(segment=seg, total_users=count, resolution_rate=resolution_rate))
+    return result
+
 
 def _build_analytics(agent_id: str, from_: str | None, to: str | None):
     driver = get_driver()
@@ -508,7 +527,7 @@ def _build_analytics(agent_id: str, from_: str | None, to: str | None):
             new_users=len(unique_users) - len(returning),
             returning_users=len(returning),
             avg_chats_per_user=round(total / len(unique_users), 1) if unique_users else 0.0,
-            segments=[],
+            segments=_build_segments(driver, agent_id, sessions, unique_users),
         ),
         "timeline": timeline,
     }

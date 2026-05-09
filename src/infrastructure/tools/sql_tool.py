@@ -1,12 +1,12 @@
 """
-SqlTool — executa SELECT queries em banco de dados configurado pelo agente.
+SqlTool — runs SELECT queries against a database configured by the agent.
 
-5 camadas de segurança:
-  1. Allowlist de dialetos (postgresql, mysql, sqlite — configurável)
-  2. Credenciais criptografadas (Fernet via security.encrypt_secret)
-  3. SELECT-only enforcement (sqlparse — rejeita DDL/DML)
-  4. Timeout de execução (settings.SQL_QUERY_TIMEOUT segundos)
-  5. Audit log por agente (data/agents/{agent_id}/sql_audit.jsonl)
+5 security layers:
+  1. Dialect allowlist (postgresql, mysql, sqlite — configurable)
+  2. Encrypted credentials (Fernet via security.encrypt_secret)
+  3. SELECT-only enforcement (sqlparse — rejects DDL/DML)
+  4. Execution timeout (settings.SQL_QUERY_TIMEOUT seconds)
+  5. Per-agent audit log (data/agents/{agent_id}/sql_audit.jsonl)
 """
 import json
 import time

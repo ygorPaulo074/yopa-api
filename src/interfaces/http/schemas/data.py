@@ -1,6 +1,6 @@
 """
-Schemas de resposta dos endpoints /data — analytics, insights, sessões e contexto de usuário.
-Nenhum destes modelos é usado para persistência; são DTOs exclusivos das rotas HTTP.
+Response schemas for /data endpoints — analytics, insights, sessions and user context.
+None of these models are used for persistence; they are HTTP-only DTOs.
 """
 from typing import Literal, Any
 from pydantic import BaseModel, ConfigDict, Field

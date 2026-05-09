@@ -1,7 +1,7 @@
 """
-Busca e extrai conteúdo textual de URLs externas.
-Suporta HTML (via BeautifulSoup) e feeds RSS/Atom (via feedparser).
-Retorna lista de dicts {"text": ...} no mesmo formato de file_extractor.
+Fetches and extracts text content from external URLs.
+Supports HTML (via BeautifulSoup) and RSS/Atom feeds (via feedparser).
+Returns a list of dicts {"text": ...} in the same format as file_extractor.
 """
 import httpx
 from typing import Any

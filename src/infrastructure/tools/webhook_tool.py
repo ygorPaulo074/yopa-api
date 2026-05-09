@@ -1,6 +1,6 @@
 """
-Ferramenta de consulta via webhook registrado pelo cliente.
-Faz POST com {"query": "..."} no body; lança TimeoutError se não responder no prazo.
+Query tool via a client-registered webhook.
+Issues a POST with {"query": "..."} in the body; raises TimeoutError if no response in time.
 """
 import json
 from typing import Any

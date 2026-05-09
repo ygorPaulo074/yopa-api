@@ -1,9 +1,9 @@
 """
-Orquestra chamadas ao modelo de IA no ciclo do POST /chat.
-Carrega system prompt do cache via ContextService, mantém histórico e scores no Redis,
-executa o tool use loop via AIClient e persiste snapshot incremental a cada mensagem.
-Suporta credenciais por agente (BYOK): lê ai_model e ai_api_key do AgentRecord;
-usa AI_MODEL/AI_API_KEY globais de settings como fallback.
+Orchestrates AI model calls for the POST /chat cycle.
+Loads the system prompt from cache via ContextService, maintains history and scores in Redis,
+runs the tool-use loop via AIClient and persists an incremental snapshot per message.
+Supports per-agent credentials (BYOK): reads ai_model and ai_api_key from AgentRecord;
+falls back to the global AI_MODEL/AI_API_KEY settings.
 """
 import uuid
 import time

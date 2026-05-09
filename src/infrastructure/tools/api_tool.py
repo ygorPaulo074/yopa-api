@@ -1,6 +1,6 @@
 """
-Ferramenta de busca em API REST externa configurada pelo cliente.
-Faz GET com query param; lança TimeoutError se a API não responder no prazo.
+Search tool for a client-configured external REST API.
+Issues a GET with a query param; raises TimeoutError if the API does not respond in time.
 """
 import json
 from typing import Any

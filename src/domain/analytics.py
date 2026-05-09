@@ -1,5 +1,5 @@
 """
-Entidades do domínio Analytics: contexto de usuário e insights gerados por sessão.
+Analytics domain entities: user context and AI-generated insights per session.
 """
 from typing import Any
 from pydantic import BaseModel

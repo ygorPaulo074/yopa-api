@@ -1,8 +1,8 @@
 """
 Redis cache layer.
-Centraliza acesso ao contexto do agente, histórico de sessão, scores NLP e metadados.
-Contexto do agente não tem TTL fixo — invalidado explicitamente no PUT /agent/context.
-Sessões usam SESSION_TTL renovado a cada mensagem.
+Centralises access to agent context, session history, NLP scores and metadata.
+Agent context has no fixed TTL — it is explicitly invalidated on PUT /agent/context.
+Sessions use SESSION_TTL renewed on every message.
 """
 from redis import ConnectionPool, Redis
 from redis.exceptions import RedisError

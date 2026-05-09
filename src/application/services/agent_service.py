@@ -1,7 +1,7 @@
 """
-Gerencia o ciclo de vida dos agentes.
-Depende de PersistenceDriver (via factory) para storage,
-CacheClient para invalidação de contexto e ContextService para versionamento.
+Manages the agent lifecycle.
+Depends on PersistenceDriver (via factory) for storage,
+CacheClient for context invalidation and ContextService for versioning.
 """
 import secrets
 import uuid

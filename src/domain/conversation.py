@@ -1,5 +1,5 @@
 """
-Entidades do domínio Conversation: histórico de mensagens, metadados de sessão e scores NLP.
+Conversation domain entities: message history, session metadata and NLP scores.
 """
 from typing import Literal
 from pydantic import BaseModel

@@ -1,5 +1,5 @@
 """
-Schemas de request e response dos endpoints /chat e de ciclo de vida de sessão.
+Request and response schemas for /chat endpoints and session lifecycle.
 """
 from typing import Literal
 from pydantic import BaseModel

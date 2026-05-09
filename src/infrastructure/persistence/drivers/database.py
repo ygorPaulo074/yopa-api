@@ -1,6 +1,6 @@
 """
-Driver de persistência via banco de dados relacional (PostgreSQL 14+).
-Requer DATABASE_URL no .env. Campos complexos (listas, modelos aninhados) são serializados como JSON.
+Relational database persistence driver (PostgreSQL 14+).
+Requires DATABASE_URL in .env. Complex fields (lists, nested models) are serialised as JSON.
 """
 import json
 from sqlalchemy import create_engine, text

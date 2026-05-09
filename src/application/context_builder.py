@@ -1,8 +1,8 @@
 """
-Constrói o system prompt do agente a partir do AgentContextBase.
-Chamado no POST /agent e no PUT /agent/context. O resultado é cacheado no Redis
-e injetado em cada chamada ao modelo via chat_service.
-escalation_trigger é lógica de backend — nunca vai para o system prompt.
+Builds the agent system prompt from AgentContextBase.
+Called on POST /agent and PUT /agent/context. The result is cached in Redis
+and injected into every model call via chat_service.
+escalation_trigger is backend logic — it never appears in the system prompt.
 """
 from src.domain.agent import AgentContextBase
 

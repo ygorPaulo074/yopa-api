@@ -1,5 +1,5 @@
 """
-Entidades do domínio Knowledge: arquivos e URLs indexados por agente para uso como contexto no chat.
+Knowledge domain entities: files and URLs indexed per agent for use as chat context.
 """
 from typing import Any, Literal
 from pydantic import BaseModel

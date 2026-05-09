@@ -1,8 +1,8 @@
 """
-Conexão com o modelo de IA via LiteLLM.
-Abstrai o provedor (Anthropic, OpenAI, Gemini, DeepSeek, Groq), gerencia
-timeout e tool use loop. Suporta credenciais por agente (BYOK): model e api_key
-são opcionais — se omitidos, usa os fallbacks globais de settings.
+AI model connection via LiteLLM.
+Abstracts the provider (Anthropic, OpenAI, Gemini, DeepSeek, Groq), handles
+timeout and the tool-use loop. Supports per-agent credentials (BYOK): model and api_key
+are optional — falls back to global settings if omitted.
 """
 import json
 import litellm

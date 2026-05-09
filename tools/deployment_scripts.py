@@ -1,6 +1,6 @@
 """
-Geração de artefatos de deployment: SQL, Prisma, Dockerfile, docker-compose.yml.
-Chamado pelo setup.py ao finalizar a configuração inicial.
+Deployment artifact generation: SQL schema, Prisma schema, Dockerfile, docker-compose.yml.
+Called by setup.py at the end of the initial configuration wizard.
 """
 import os
 
@@ -129,7 +129,7 @@ CREATE INDEX idx_agents_deleted_at         ON agents(deleted_at);
     os.makedirs("scripts", exist_ok=True)
     with open("scripts/schema.sql", "w") as f:
         f.write(sql)
-    print("  ✓ scripts/schema.sql gerado.")
+    print("  ✓ scripts/schema.sql generated.")
 
 
 # ── Prisma Schema ──────────────────────────────────────────────────────────────
@@ -274,7 +274,7 @@ model KnowledgeFile {
     os.makedirs("scripts", exist_ok=True)
     with open("scripts/schema.prisma", "w") as f:
         f.write(content)
-    print("  ✓ scripts/schema.prisma gerado.")
+    print("  ✓ scripts/schema.prisma generated.")
 
 
 # ── Dockerfile ─────────────────────────────────────────────────────────────────
@@ -297,7 +297,7 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "{port}"]
 """
     with open("Dockerfile", "w") as f:
         f.write(content)
-    print("  ✓ Dockerfile gerado.")
+    print("  ✓ Dockerfile generated.")
 
 
 # ── Docker Compose ─────────────────────────────────────────────────────────────
@@ -352,4 +352,4 @@ volumes:
 {db_volume}"""
     with open("docker-compose.yml", "w") as f:
         f.write(content)
-    print("  ✓ docker-compose.yml gerado.")
+    print("  ✓ docker-compose.yml generated.")

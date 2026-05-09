@@ -22,6 +22,6 @@ def get_driver() -> PersistenceDriver:
         return WebhookDriver()
 
     raise ValueError(
-        f"STORAGE_TYPE inválido: '{settings.STORAGE_TYPE}'. "
-        "Valores aceitos: 'local', 'database', 'webhook'."
+        f"Invalid STORAGE_TYPE: '{settings.STORAGE_TYPE}'. "
+        "Accepted values: 'local', 'database', 'webhook'."
     )

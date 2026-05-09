@@ -1,9 +1,9 @@
 """
-Contrato abstrato dos drivers de persistência (Strategy Pattern).
-Qualquer chamada de persistência nos services deve operar sobre este contrato,
-nunca sobre um driver concreto diretamente — permite trocar o storage via .env
-sem alterar a lógica de negócio.
-Sanitização de PII e segurança são responsabilidade dos drivers concretos.
+Abstract contract for persistence drivers (Strategy Pattern).
+All persistence calls in services must operate against this contract,
+never against a concrete driver directly — allows swapping storage via .env
+without changing business logic.
+PII sanitisation and security are the responsibility of the concrete drivers.
 """
 from abc import ABC, abstractmethod
 

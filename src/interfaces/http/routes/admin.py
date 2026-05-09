@@ -1,7 +1,7 @@
 """
-Endpoints administrativos — requerem X-Internal-Token; não expostos ao usuário final.
-  GET  /health         — liveness + readiness (sem auth)
-  POST /admin/purge    — hard-delete de agentes e sessões com deleted_at < before
+Admin endpoints — require X-Internal-Token; not exposed to end users.
+  GET  /health         — liveness + readiness (no auth)
+  POST /admin/purge    — hard-delete agents and sessions with deleted_at < before
 """
 import hmac
 from fastapi import APIRouter, HTTPException, Request, status

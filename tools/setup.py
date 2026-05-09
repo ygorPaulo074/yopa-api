@@ -1,7 +1,7 @@
 """
-Wizard de configuração inicial do AI-ChatBot.
-Gera .env e, opcionalmente, Dockerfile + docker-compose.yml.
-Execute a partir da raiz do projeto: python tools/setup.py
+Initial configuration wizard for AI-ChatBot.
+Generates .env and, optionally, Dockerfile + docker-compose.yml.
+Run from the project root: python tools/setup.py
 """
 import json
 import os
@@ -19,7 +19,7 @@ from deployment_scripts import (
     generate_docker_compose,
 )
 
-# ── Catálogo ───────────────────────────────────────────────────────────────────
+# ── Catalog ────────────────────────────────────────────────────────────────────
 
 DEPLOY_OPTIONS = {"1": "local", "2": "docker"}
 
@@ -31,13 +31,13 @@ PROVIDERS = {
         "validate_url": "https://api.openai.com/v1/models",
         "auth_type": "bearer",
         "models": [
-            ("gpt-4o",        "multimodal, melhor custo-benefício"),
-            ("gpt-4o-mini",   "versão leve e barata do 4o"),
+            ("gpt-4o",        "multimodal, best cost-benefit"),
+            ("gpt-4o-mini",   "lightweight and cheap variant of 4o"),
             ("o3",            "reasoning model"),
-            ("o4-mini",       "reasoning leve"),
-            ("gpt-5",         "mais recente, uso geral avançado"),
-            ("gpt-5-mini",    "variante econômica do GPT-5"),
-            ("gpt-5-nano",    "variante ultra-leve do GPT-5"),
+            ("o4-mini",       "lightweight reasoning"),
+            ("gpt-5",         "latest, advanced general use"),
+            ("gpt-5-mini",    "economical variant of GPT-5"),
+            ("gpt-5-nano",    "ultra-lightweight variant of GPT-5"),
         ],
     },
     "2": {
@@ -45,9 +45,9 @@ PROVIDERS = {
         "validate_url": "https://api.anthropic.com/v1/models",
         "auth_type": "anthropic",
         "models": [
-            ("claude-sonnet-4-6", "equilíbrio velocidade/capacidade"),
-            ("claude-opus-4-6",   "mais poderoso, tarefas complexas"),
-            ("claude-haiku-4-5",  "mais rápido e barato"),
+            ("claude-sonnet-4-6", "balanced speed/capability"),
+            ("claude-opus-4-6",   "most powerful, complex tasks"),
+            ("claude-haiku-4-5",  "fastest and cheapest"),
         ],
     },
     "3": {
@@ -55,8 +55,8 @@ PROVIDERS = {
         "validate_url": None,
         "auth_type": "google",
         "models": [
-            ("gemini/gemini-2.0-flash", "rápido e eficiente"),
-            ("gemini/gemini-2.5-pro",   "contexto enorme, multimodal"),
+            ("gemini/gemini-2.0-flash", "fast and efficient"),
+            ("gemini/gemini-2.5-pro",   "huge context window, multimodal"),
         ],
     },
     "4": {
@@ -64,9 +64,9 @@ PROVIDERS = {
         "validate_url": "https://api.mistral.ai/v1/models",
         "auth_type": "bearer",
         "models": [
-            ("mistral/mistral-large-latest", "mais capaz"),
-            ("mistral/mistral-small-latest", "leve"),
-            ("mistral/codestral-latest",     "especializado em código"),
+            ("mistral/mistral-large-latest", "most capable"),
+            ("mistral/mistral-small-latest", "lightweight"),
+            ("mistral/codestral-latest",     "code-specialized"),
         ],
     },
     "5": {
@@ -74,8 +74,8 @@ PROVIDERS = {
         "validate_url": "https://api.deepseek.com/v1/models",
         "auth_type": "bearer",
         "models": [
-            ("deepseek/deepseek-chat",     "DeepSeek-V3, competitivo em custo"),
-            ("deepseek/deepseek-reasoner", "modelo de raciocínio"),
+            ("deepseek/deepseek-chat",     "DeepSeek-V3, cost-competitive"),
+            ("deepseek/deepseek-reasoner", "reasoning model"),
         ],
     },
     "6": {
@@ -83,8 +83,19 @@ PROVIDERS = {
         "validate_url": "https://api.cohere.ai/v1/models",
         "auth_type": "bearer",
         "models": [
-            ("command-r-plus", "forte em RAG e busca semântica"),
-            ("command-r",      "versão mais leve"),
+            ("command-r-plus", "strong in RAG and semantic search"),
+            ("command-r",      "lighter variant"),
+        ],
+    },
+    "7": {
+        "name": "Groq",
+        "validate_url": "https://api.groq.com/openai/v1/models",
+        "auth_type": "bearer",
+        "models": [
+            ("groq/llama-3.3-70b-versatile", "Llama 3.3 70B — fast and capable"),
+            ("groq/llama-3.1-8b-instant",    "Llama 3.1 8B — ultra-fast, low latency"),
+            ("groq/mixtral-8x7b-32768",      "Mixtral 8x7B — long context"),
+            ("groq/gemma2-9b-it",            "Gemma 2 9B — efficient instruction-tuned"),
         ],
     },
 }
@@ -92,27 +103,76 @@ PROVIDERS = {
 STORAGE_OPTIONS = {"1": "local", "2": "database", "3": "webhook"}
 
 ANALYZER_LANGUAGE_OPTIONS = {
-    "1": ("pt", "Português"),
-    "2": ("es", "Espanhol"),
-    "3": ("fr", "Francês"),
-    "4": ("de", "Alemão"),
-    "5": ("it", "Italiano"),
-    "6": ("ja", "Japonês"),
-    "7": ("zh", "Chinês"),
+    "1": ("pt", "Portuguese"),
+    "2": ("es", "Spanish"),
+    "3": ("fr", "French"),
+    "4": ("de", "German"),
+    "5": ("it", "Italian"),
+    "6": ("ja", "Japanese"),
+    "7": ("zh", "Chinese"),
 }
 
 LOG_LEVEL_OPTIONS = {"1": "DEBUG", "2": "INFO", "3": "WARNING", "4": "ERROR"}
 
 
+# ── Terminal UI ────────────────────────────────────────────────────────────────
+
+_RST  = "\033[0m"
+_BOLD = "\033[1m"
+_DIM  = "\033[2m"
+_BLUE = "\033[34m"
+_CYAN = "\033[36m"
+_GRN  = "\033[32m"
+_RED  = "\033[31m"
+_YLW  = "\033[33m"
+_MAG  = "\033[35m"
+
+_DOT   = f"{_BLUE}●{_RST}"     # active step marker
+_DONE  = f"{_GRN}◆{_RST}"      # completed step marker
+_WARN  = f"{_YLW}▲{_RST}"      # warning
+_LINE  = f"{_DIM}│{_RST}"      # vertical connector
+_UNSEL = f"{_DIM}○{_RST}"      # unselected option
+_ARROW = f"{_CYAN}›{_RST}"     # input prompt arrow
+
+
+def _header() -> None:
+    print(f"\n  {_BLUE}{_BOLD}●  AI-ChatBot{_RST}  {_DIM}Setup wizard — run once before starting the server.{_RST}\n")
+
+
+def _step(title: str, hint: str = "") -> None:
+    print(f"\n  {_DOT}  {_BOLD}{title}{_RST}")
+    if hint:
+        print(f"  {_LINE}  {_DIM}{hint}{_RST}")
+
+
+def _done(label: str, value: str) -> None:
+    print(f"  {_DONE}  {_DIM}{label}{_RST}  {value}")
+
+
+def _opt(n: str | int, label: str, desc: str = "") -> None:
+    desc_part = f"  {_DIM}{desc}{_RST}" if desc else ""
+    print(f"  {_LINE}  {_UNSEL}  {_DIM}{n}.{_RST}  {label}{desc_part}")
+
+
+def _ask(label: str, default: str = "") -> str:
+    hint = f"  {_DIM}({default}){_RST}" if default else ""
+    val = input(f"  {_LINE}  {_ARROW}  {label}{hint}  ").strip()
+    return val or default
+
+
+def _err(msg: str) -> None:
+    print(f"  {_RED}✗{_RST}  {msg}")
+
+
+def _warn(msg: str) -> None:
+    print(f"  {_WARN}  {msg}")
+
+
+def _ok(msg: str) -> None:
+    print(f"  {_GRN}✓{_RST}  {msg}")
+
+
 # ── Helpers ────────────────────────────────────────────────────────────────────
-
-def _b(text: str) -> str:
-    return f"\033[1m{text}\033[0m"
-
-
-def _err(text: str) -> None:
-    print(f"\033[1mErro:\033[0m {text}")
-
 
 def validate_api_key(provider_num: str, api_key: str) -> tuple[bool, str]:
     p = PROVIDERS[provider_num]
@@ -132,12 +192,12 @@ def validate_api_key(provider_num: str, api_key: str) -> tuple[bool, str]:
         if r.status_code == 200:
             return True, ""
         if r.status_code in (401, 403):
-            return False, "API key inválida."
-        return False, f"Status inesperado: {r.status_code}."
+            return False, "Invalid API key."
+        return False, f"Unexpected status: {r.status_code}."
     except requests.exceptions.ConnectionError:
-        return False, "Falha de conexão. Verifique sua internet."
+        return False, "Connection failed. Check your internet."
     except requests.exceptions.Timeout:
-        return False, "Timeout ao validar a key."
+        return False, "Request timed out while validating the key."
     except Exception as e:
         return False, str(e)[:120]
 
@@ -146,14 +206,14 @@ def validate_redis_url(url: str) -> bool:
     import re
     import redis as redis_lib
     if not re.match(r"^rediss?://.*|^unix://.*", url):
-        print("  Formato inválido. Use redis://, rediss:// ou unix://")
-        print("  Ex: redis://localhost:6379  |  rediss://user:pass@host:6380")
+        _err("Invalid format. Use redis://, rediss:// or unix://")
+        print(f"  {_LINE}  {_DIM}e.g. redis://localhost:6379  |  rediss://user:pass@host:6380{_RST}")
         return False
     try:
         redis_lib.from_url(url, socket_connect_timeout=5).ping()
         return True
     except Exception as e:
-        print(f"  Falha ao conectar: {e}")
+        _err(f"Connection failed: {e}")
         return False
 
 
@@ -161,7 +221,8 @@ def validate_database_url(url: str) -> bool:
     import re
     if re.match(r"^(postgresql|postgres|mysql|sqlite)(\+\w+)?://.*", url):
         return True
-    print("  Formato inválido. Ex: postgresql://user:pass@localhost:5432/db")
+    _err("Invalid format.")
+    print(f"  {_LINE}  {_DIM}e.g. postgresql://user:pass@localhost:5432/db{_RST}")
     return False
 
 
@@ -185,222 +246,234 @@ def run_setup() -> None:
     database_url = db_user = db_password = db_name = ""
     webhook_url = internal_token = data_path = ""
 
-    print("\n" + _b("=== CONFIGURAÇÃO INICIAL DO AI-CHATBOT ==="))
-    print(_b("AVISO:") + " Este setup deve ser executado apenas uma vez.")
-    print("Para reconfigurar, delete " + _b(".initialized") + " e execute novamente.\n")
+    _header()
 
-    # ── Step 0: Destino do deploy ──────────────────────────────────────────────
-    print(_b("STEP 0: DESTINO DO DEPLOY"))
-    print("  1. Local  — executa com 'invoke run' nesta máquina")
-    print("  2. Docker — gera Dockerfile + docker-compose.yml")
+    # ── Step 0: Deploy target ──────────────────────────────────────────────────
+    _step("Deploy target", "Where will this run?")
+    _opt(1, "Local",  "run with 'invoke run' on this machine")
+    _opt(2, "Docker", "generates Dockerfile + docker-compose.yml")
     while True:
-        c = input("\nOpção [default: 1]: ").strip() or "1"
+        c = _ask("Option", "1")
         if c in DEPLOY_OPTIONS:
             deploy_target = DEPLOY_OPTIONS[c]
             break
-        _err("Digite 1 ou 2.")
+        _err("Enter 1 or 2.")
+    _done("deploy", deploy_target)
     is_docker = deploy_target == "docker"
 
-    # ── Step 1: Modo de autenticação ───────────────────────────────────────────
-    print("\n" + _b("STEP 1: MODO DE AUTENTICAÇÃO"))
-    print("  1. Standalone — a API autentica diretamente via Bearer {agent_id}.{secret}")
-    print("  2. Internal   — atrás do Yopa Proxy; X-Agent-Id injetado pelo proxy")
+    # ── Step 1: Auth mode ─────────────────────────────────────────────────────
+    _step("Auth mode", "How will requests be authenticated?")
+    _opt(1, "Standalone", "API authenticates via Bearer {agent_id}.{secret}")
+    _opt(2, "Internal",   "behind Yopa Proxy — X-Agent-Id injected by the proxy")
     while True:
-        c = input("\nOpção [default: 1]: ").strip() or "1"
+        c = _ask("Option", "1")
         if c in AUTH_MODE_OPTIONS:
             auth_mode = AUTH_MODE_OPTIONS[c]
             break
-        _err("Digite 1 ou 2.")
+        _err("Enter 1 or 2.")
+    _done("auth mode", auth_mode)
 
     if auth_mode == "internal":
         internal_token = secrets.token_hex(32)
-        print(f"\n  {_b('INTERNAL_TOKEN gerado:')}")
-        print(f"  {_b(internal_token)}")
-        print(f"  {_b('Guarde este token')} e configure-o no Yopa Proxy.")
-        print("  A configuração do proxy deve ser feita separadamente.")
+        print(f"\n  {_WARN}  {_BOLD}INTERNAL_TOKEN generated — save this before continuing:{_RST}")
+        print(f"\n       {_CYAN}{_BOLD}{internal_token}{_RST}\n")
+        print(f"  {_LINE}  {_DIM}Copy this token to your Yopa Proxy configuration.{_RST}")
+        print(f"  {_LINE}  {_DIM}Proxy setup must be done separately.{_RST}")
+        input(f"  {_LINE}  {_ARROW}  Press Enter once you've saved it...  ")
 
-    # ── Step 2: Provedor de IA ─────────────────────────────────────────────────
-    print("\n" + _b("STEP 2: PROVEDOR DE IA"))
+    # ── Step 2: AI provider ───────────────────────────────────────────────────
+    _step("AI provider", "Which provider's API will this agent use?")
     for k, p in PROVIDERS.items():
-        print(f"  {k}. {p['name']}")
+        _opt(k, p["name"])
     while True:
-        c = input("\nOpção: ").strip()
+        c = _ask("Option")
         if c in PROVIDERS:
             provider_num = c
             provider = PROVIDERS[c]
             break
-        _err("Seleção inválida.")
+        _err("Invalid selection.")
+    _done("provider", provider["name"])
 
-    # ── Step 3: API Key ────────────────────────────────────────────────────────
-    print(f"\n{_b('STEP 3: API KEY — ' + provider['name'])}")
+    # ── Step 3: API key ────────────────────────────────────────────────────────
+    _step("API key", f"Paste your {provider['name']} API key.")
     while True:
-        api_key = input("Cole sua API key: ").strip()
+        api_key = _ask("API key")
         if not api_key:
-            _err("A key não pode ser vazia.")
+            _err("API key cannot be empty.")
             continue
-        print("  Validando...", end="", flush=True)
-        ok, err = validate_api_key(provider_num, api_key)
+        print(f"  {_LINE}  {_DIM}Validating...{_RST} ", end="", flush=True)
+        ok, err_msg = validate_api_key(provider_num, api_key)
         if ok:
-            print(" ✓")
+            print(f"{_GRN}✓{_RST}")
             break
-        print(f" ✗\n  \033[1mErro:\033[0m {err}")
+        print(f"{_RED}✗{_RST}")
+        _err(err_msg)
+    _done("key", f"{'•' * 8}{api_key[-4:]}")
 
-    # ── Step 4: Modelo ─────────────────────────────────────────────────────────
-    print(f"\n{_b('STEP 4: MODELO — ' + provider['name'])}")
+    # ── Step 4: Model ─────────────────────────────────────────────────────────
+    _step("Model", f"Which {provider['name']} model should this agent use?")
     models = provider["models"]
     for i, (model_id, desc) in enumerate(models, 1):
-        print(f"  {i}. {model_id:<42} {desc}")
+        _opt(i, model_id, desc)
     while True:
-        c = input("\nOpção: ").strip()
+        c = _ask("Option")
         if c.isdigit() and 1 <= int(c) <= len(models):
             ai_model = models[int(c) - 1][0]
             break
-        _err(f"Digite um número entre 1 e {len(models)}.")
+        _err(f"Enter a number between 1 and {len(models)}.")
+    _done("model", ai_model)
 
-    # ── Step 5: Timeout ────────────────────────────────────────────────────────
-    print("\n" + _b("STEP 5: TIMEOUT DA IA"))
+    # ── Step 5: AI timeout ────────────────────────────────────────────────────
+    _step("AI timeout", "Max seconds to wait for a model response.")
     while True:
-        timeout = input("Timeout em segundos [default: 30]: ").strip() or "30"
+        timeout = _ask("Timeout in seconds", "30")
         if timeout.isdigit() and int(timeout) > 0:
             break
-        _err("Digite um número válido.")
+        _err("Enter a valid number.")
+    _done("timeout", f"{timeout}s")
 
-    # ── Step 6: Modo de execução ───────────────────────────────────────────────
+    # ── Step 6: Run mode ──────────────────────────────────────────────────────
+    _step("Run mode")
     if is_docker:
         run_mode = "production"
-        print(f"\n  Deploy Docker — RUN_MODE=production definido automaticamente.")
+        print(f"  {_LINE}  {_DIM}Docker deploy — RUN_MODE=production set automatically.{_RST}")
     else:
-        print("\n" + _b("STEP 6: MODO DE EXECUÇÃO"))
+        _opt(1, "development", "auto-reload, debug logs")
+        _opt(2, "production",  "optimized for live traffic")
         while True:
-            run_mode = input("Modo (development/production): ").strip()
+            run_mode = _ask("Mode")
             if run_mode in ("development", "production"):
                 break
-            _err("Digite 'development' ou 'production'.")
+            _err("Enter 'development' or 'production'.")
+    _done("run mode", run_mode)
 
-    # ── Step 7: Porta ──────────────────────────────────────────────────────────
-    print("\n" + _b("STEP 7: PORTA"))
+    # ── Step 7: Port ──────────────────────────────────────────────────────────
+    _step("Port", "Which port should the server listen on?")
     while True:
-        port = input("Porta do servidor [default: 8000]: ").strip() or "8000"
+        port = _ask("Port", "8000")
         if port.isdigit() and 1 <= int(port) <= 65535:
             break
-        _err("Porta inválida.")
+        _err("Invalid port.")
+    _done("port", port)
 
-    # ── Step 8: Armazenamento ──────────────────────────────────────────────────
-    print("\n" + _b("STEP 8: TIPO DE ARMAZENAMENTO"))
-    print("  1. Local    — arquivos JSON no disco")
-    print("  2. Database — PostgreSQL / MySQL / SQLite")
-    print("  3. Webhook  — persiste via HTTP para endpoint externo")
+    # ── Step 8: Storage ───────────────────────────────────────────────────────
+    _step("Storage type", "Where should agent and session data be stored?")
+    _opt(1, "Local",    "JSON files on disk")
+    _opt(2, "Database", "PostgreSQL / MySQL / SQLite")
+    _opt(3, "Webhook",  "persist via HTTP to an external endpoint")
     while True:
-        c = input("\nOpção [default: 1]: ").strip() or "1"
+        c = _ask("Option", "1")
         if c not in STORAGE_OPTIONS:
-            _err("Digite 1, 2 ou 3.")
+            _err("Enter 1, 2 or 3.")
             continue
         storage_type = STORAGE_OPTIONS[c]
 
         if storage_type == "local":
-            data_path = input("Caminho do diretório de dados [default: ./data]: ").strip() or "./data"
+            data_path = _ask("Data directory path", "./data")
 
         elif storage_type == "database":
-            print("\n  " + _b("CONFIGURAÇÃO: DATABASE"))
+            print(f"\n  {_LINE}  {_BOLD}Database configuration{_RST}")
             while True:
-                database_url = input("Connection string\n  Ex: postgresql://user:pass@localhost:5432/db\n> ").strip()
+                database_url = _ask("Connection string (e.g. postgresql://user:pass@host:5432/db)")
                 if validate_database_url(database_url):
                     break
-            db_user = input("Usuário [default: postgres]: ").strip() or "postgres"
+            db_user = _ask("User", "postgres")
             while True:
-                db_password = input("Senha: ").strip()
+                db_password = _ask("Password")
                 if db_password:
                     break
-                _err("Senha não pode ser vazia.")
-            db_name = input("Nome do banco [default: chatbot]: ").strip() or "chatbot"
+                _err("Password cannot be empty.")
+            db_name = _ask("Database name", "chatbot")
             while True:
-                gen = input("\nGerar scripts de schema? (sim/nao): ").strip().lower()
-                if gen in ("sim", "yes", "s"):
-                    print("  1. SQL Script\n  2. Prisma Migrate")
-                    schema_type = input("Opção: ").strip()
+                gen = _ask("Generate schema scripts?", "no").lower()
+                if gen in ("yes", "y"):
+                    print()
+                    _opt(1, "SQL Script")
+                    _opt(2, "Prisma Migrate")
+                    schema_type = _ask("Option")
                     os.makedirs("scripts", exist_ok=True)
                     if schema_type == "1":
                         create_sql_scripts()
                     elif schema_type == "2":
                         create_prisma_migrate()
                     break
-                elif gen in ("nao", "não", "no", "n"):
-                    print("  " + _b("Atenção:") + " crie o schema manualmente antes de iniciar.")
+                elif gen in ("no", "n"):
+                    _warn("Create the schema manually before starting.")
                     break
-                _err("Digite 'sim' ou 'nao'.")
+                _err("Enter 'yes' or 'no'.")
 
         elif storage_type == "webhook":
-            webhook_url = input("Webhook URL (https://...): ").strip()
+            webhook_url = _ask("Webhook URL (https://...)")
 
         break
+    _done("storage", storage_type)
 
-    # ── Step 9: Redis ──────────────────────────────────────────────────────────
-    print("\n" + _b("STEP 9: REDIS"))
-    print("  Usado para cache de contexto, histórico de sessão e scores NLP.")
+    # ── Step 9: Redis ─────────────────────────────────────────────────────────
+    _step("Redis", "Used for context cache, session history, and NLP scores.")
     if is_docker:
         redis_default = "redis://redis:6379"
-        print(f"  Modo Docker — URL padrão: {_b(redis_default)}")
-        redis_url = input(f"Redis URL [default: {redis_default}]: ").strip() or redis_default
-        print("  " + _b("Nota:") + " conexão não será testada (container ainda não rodando).")
+        redis_url = _ask("Redis URL", redis_default)
+        _warn("Connection will not be tested (container not running yet).")
     else:
         while True:
-            redis_url = input("Redis URL [default: redis://localhost:6379]: ").strip() or "redis://localhost:6379"
+            redis_url = _ask("Redis URL", "redis://localhost:6379")
             if validate_redis_url(redis_url):
                 break
+    _done("redis", redis_url)
 
-    # ── Step 10: TTL de sessão ─────────────────────────────────────────────────
-    print("\n" + _b("STEP 10: TTL DE SESSÃO"))
+    # ── Step 10: Session TTL ──────────────────────────────────────────────────
+    _step("Session TTL", "How long should inactive sessions be kept in cache?")
     while True:
-        session_ttl = input("TTL em segundos [default: 86400 (24h)]: ").strip() or "86400"
+        session_ttl = _ask("TTL in seconds", "86400")
         if session_ttl.isdigit() and int(session_ttl) > 0:
             break
-        _err("Digite um número válido.")
+        _err("Enter a valid number.")
+    _done("session TTL", f"{session_ttl}s")
 
-    # ── Step 11: Chave de criptografia ─────────────────────────────────────────
-    print("\n" + _b("STEP 11: CHAVE DE CRIPTOGRAFIA"))
-    print("  Usada para criptografar API keys por agente (BYOK) e connection strings SQL.")
+    # ── Step 11: Encryption key ───────────────────────────────────────────────
+    _step("Encryption key", "Encrypts per-agent API keys (BYOK) and SQL connection strings.")
     encryption_key = _gen_encryption_key()
-    print(f"\n  {_b('Chave gerada:')}")
-    print(f"  {_b(encryption_key)}")
-    print(f"  {_b('⚠  Guarde esta chave em local seguro.')}")
-    print("  Perder a chave torna os secrets armazenados irrecuperáveis.")
+    print(f"\n  {_WARN}  {_BOLD}Back up this key — losing it makes all stored secrets unrecoverable:{_RST}")
+    print(f"\n       {_CYAN}{_BOLD}{encryption_key}{_RST}\n")
+    input(f"  {_LINE}  {_ARROW}  Press Enter once you've saved it...  ")
+    _done("encryption key", "generated ✓")
 
-    # ── Step 12: Configurações de tools ───────────────────────────────────────
-    print("\n" + _b("STEP 12: CONFIGURAÇÕES DE TOOLS"))
+    # ── Step 12: Tool settings ────────────────────────────────────────────────
+    _step("Tool settings", "Limits for AI tool-use and SQL queries.")
     while True:
-        max_tool_rounds = input("Máximo de rounds de tool-use por mensagem [default: 5]: ").strip() or "5"
+        max_tool_rounds = _ask("Max tool-use rounds per message", "5")
         if max_tool_rounds.isdigit() and int(max_tool_rounds) > 0:
             break
-        _err("Digite um número válido.")
+        _err("Enter a valid number.")
     while True:
-        sql_timeout = input("Timeout de queries SQL em segundos [default: 10]: ").strip() or "10"
+        sql_timeout = _ask("SQL query timeout (seconds)", "10")
         if sql_timeout.isdigit() and int(sql_timeout) > 0:
             break
-        _err("Digite um número válido.")
+        _err("Enter a valid number.")
     while True:
-        sql_max_rows = input("Máximo de linhas retornadas por query SQL [default: 50]: ").strip() or "50"
+        sql_max_rows = _ask("Max rows per SQL query", "50")
         if sql_max_rows.isdigit() and int(sql_max_rows) > 0:
             break
-        _err("Digite um número válido.")
+        _err("Enter a valid number.")
+    _done("tools", f"rounds={max_tool_rounds}  sql_timeout={sql_timeout}s  max_rows={sql_max_rows}")
 
-    # ── Step 13: Idiomas do analisador ─────────────────────────────────────────
-    print("\n" + _b("STEP 13: IDIOMAS DO ANALISADOR NLP"))
-    print("  Inglês sempre incluído. Selecione idiomas adicionais:")
+    # ── Step 13: NLP analyzer languages ──────────────────────────────────────
+    _step("NLP analyzer languages", "English is always included. Select additional languages:")
     for k, (code, name) in ANALYZER_LANGUAGE_OPTIONS.items():
-        print(f"  {k}. {name} ({code})")
+        _opt(k, name, code)
     analyzer_languages = ["en"]
     while True:
-        raw = input("Idiomas (números separados por vírgula) [default: nenhum]: ").strip()
-        if not raw:
+        raw = _ask("Languages (comma-separated numbers)", "none")
+        if not raw or raw.lower() == "none":
             break
         selections = [s.strip() for s in raw.split(",")]
         invalid = [s for s in selections if s not in ANALYZER_LANGUAGE_OPTIONS]
         if invalid:
-            _err(f"Opções inválidas: {', '.join(invalid)}.")
+            _err(f"Invalid options: {', '.join(invalid)}.")
             continue
         selected_codes = [ANALYZER_LANGUAGE_OPTIONS[s][0] for s in selections]
         analyzer_languages += selected_codes
-        print(f"\n  Baixando pacotes: {', '.join(selected_codes)} → en")
+        print(f"  {_LINE}  {_DIM}Downloading packages: {', '.join(selected_codes)} → en{_RST}")
         try:
             from argostranslate import package as argo_pkg
             argo_pkg.update_package_index()
@@ -409,26 +482,28 @@ def run_setup() -> None:
                 pkg = next((p for p in available if p.from_code == code and p.to_code == "en"), None)
                 if pkg:
                     argo_pkg.install_from_path(pkg.download())
-                    print(f"  ✓ {code} → en instalado.")
+                    _ok(f"{code} → en installed.")
                 else:
-                    print(f"  ✗ Pacote {code} → en não encontrado.")
+                    _err(f"Package {code} → en not found.")
         except Exception as e:
-            print(_b("Aviso:") + f" não foi possível baixar pacotes: {e}")
+            _warn(f"Could not download packages: {e}")
         break
+    _done("NLP languages", ", ".join(analyzer_languages))
 
-    # ── Step 14: Nível de log ──────────────────────────────────────────────────
-    print("\n" + _b("STEP 14: NÍVEL DE LOG"))
+    # ── Step 14: Log level ────────────────────────────────────────────────────
+    _step("Log level", "Verbosity of server logs.")
     for k, lvl in LOG_LEVEL_OPTIONS.items():
-        print(f"  {k}. {lvl}")
+        _opt(k, lvl)
     while True:
-        c = input("\nOpção [default: 2 (INFO)]: ").strip() or "2"
+        c = _ask("Option", "2")
         if c in LOG_LEVEL_OPTIONS:
             log_level = LOG_LEVEL_OPTIONS[c]
             break
-        _err("Opção inválida.")
+        _err("Invalid option.")
+    _done("log level", log_level)
 
-    # ── Gravar .env ────────────────────────────────────────────────────────────
-    print("\n" + _b("GERANDO .env..."))
+    # ── Write .env ─────────────────────────────────────────────────────────────
+    print(f"\n  {_DOT}  {_BOLD}Writing .env...{_RST}")
     lines = [
         f"AI_API_KEY={api_key}",
         f"AI_MODEL={ai_model}",
@@ -465,19 +540,33 @@ def run_setup() -> None:
     ]
     with open(".env", "w") as f:
         f.write("\n".join(lines) + "\n")
-    print("  ✓ .env gerado.")
+    _ok(".env written.")
 
-    # ── Arquivos Docker ────────────────────────────────────────────────────────
+    # ── Docker files ───────────────────────────────────────────────────────────
     if is_docker:
-        print("\n" + _b("GERANDO ARQUIVOS DOCKER..."))
+        print(f"\n  {_DOT}  {_BOLD}Generating Docker files...{_RST}")
         generate_dockerfile(port)
         generate_docker_compose(port, storage_type)
-        print("\n" + _b("Próximos passos:"))
-        print(f"  1. docker compose up --build")
-        print(f"  2. API disponível em http://localhost:{port}")
+        _ok("Dockerfile and docker-compose.yml generated.")
+
+        print(f"\n  {_DOT}  {_BOLD}Starting Docker containers...{_RST}")
+        print(f"  {_LINE}  {_DIM}Running: docker compose up --build -d{_RST}\n")
+        import subprocess
+        result = subprocess.run(["docker", "compose", "up", "--build", "-d"])
+        if result.returncode == 0:
+            print()
+            _done("containers", "up and running ✓")
+            print(f"\n  {_LINE}  {_DIM}API available at{_RST}  {_CYAN}http://localhost:{port}{_RST}")
+            if storage_type == "database":
+                print(f"  {_LINE}  {_DIM}Database initialized via schema.sql on first start.{_RST}")
+            print(f"  {_LINE}  {_DIM}View logs:{_RST}  {_CYAN}docker compose logs -f api{_RST}")
+            print(f"  {_LINE}  {_DIM}Stop:{_RST}  {_CYAN}docker compose down{_RST}")
+        else:
+            print()
+            _err("docker compose failed. Check the output above for details.")
 
     _raise_init_flag()
-    print("\n" + _b("Configuração concluída!") + " .env gerado.\n")
+    print(f"\n  {_DONE}  {_BOLD}Setup complete!{_RST}  {_DIM}Run{_RST}  {_CYAN}invoke run{_RST}  {_DIM}to start the server.{_RST}\n")
 
 
 if __name__ == "__main__":

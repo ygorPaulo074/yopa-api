@@ -1,7 +1,7 @@
 """
-Análise local de qualidade por mensagem, sem consumo de tokens.
-Usa pyspellchecker, argostranslate, textblob, spaCy (en_core_web_sm) e TF-IDF.
-Chamado após cada mensagem do POST /chat — resultado acumulado em ScoreData e salvo no Redis.
+Local per-message quality analysis, no AI token consumption.
+Uses pyspellchecker, argostranslate, textblob, spaCy (en_core_web_sm) and TF-IDF.
+Called after each POST /chat message — result accumulated in ScoreData and saved to Redis.
 """
 from __future__ import annotations
 

@@ -1,8 +1,8 @@
 """
-Configurações globais da aplicação.
-Carrega variáveis de ambiente via Pydantic BaseSettings e expõe `settings` como ponto único de acesso.
-AUTH_MODE controla o mecanismo de autenticação: "standalone" usa Bearer {agent_id}.{secret};
-"internal" espera X-Internal-Token + X-Agent-Id injetados pelo Yopa Proxy.
+Global application settings.
+Loads environment variables via Pydantic BaseSettings and exposes `settings` as the single access point.
+AUTH_MODE controls the authentication mechanism: "standalone" uses Bearer {agent_id}.{secret};
+"internal" expects X-Internal-Token + X-Agent-Id injected by the Yopa Proxy.
 """
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict

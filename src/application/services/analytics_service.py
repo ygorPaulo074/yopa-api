@@ -1,4 +1,4 @@
 """
-Placeholder para serviço de analytics.
-A lógica de agregação atualmente está inline no router data.py — será extraída aqui futuramente.
+Analytics service placeholder.
+Aggregation logic is currently inline in the data router — will be extracted here in the future.
 """

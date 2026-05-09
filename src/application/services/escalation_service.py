@@ -1,7 +1,10 @@
 """
-Despacha escalações para o destino configurado em AgentContextBase.escalation_destination.
-Destinos implementados: webhook. Stubs: email, github_issue, queue.
+Dispatches escalations to the destination configured in AgentContextBase.escalation_destination.
+Implemented destinations: webhook. Stubs: email, github_issue, queue.
 """
+import hashlib
+import hmac
+import json
 from datetime import datetime, timezone
 from typing import Literal
 
@@ -37,11 +40,24 @@ def dispatch_escalation(
         _dispatch_webhook(dest.url, dest.token, payload)
 
 
+def _sign_payload(body: bytes) -> str | None:
+    from src.infrastructure.config import settings
+    secret = settings.INTERNAL_TOKEN
+    if not secret:
+        return None
+    sig = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    return f"sha256={sig}"
+
+
 def _dispatch_webhook(url: str, token: str | None, payload: dict) -> None:
+    body = json.dumps(payload, separators=(",", ":")).encode()
     headers = {"Content-Type": "application/json"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
+    signature = _sign_payload(body)
+    if signature:
+        headers["X-Yopa-Signature"] = signature
     try:
-        requests.post(url, json=payload, headers=headers, timeout=10)
+        requests.post(url, data=body, headers=headers, timeout=10)
     except Exception:
         pass

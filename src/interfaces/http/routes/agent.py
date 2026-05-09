@@ -282,7 +282,7 @@ Omit fields not mentioned. Use these types:
 
 
 @router.post("/validate-sql", response_model=ValidateSqlResponse)
-def validate_sql_connection(body: ValidateSqlRequest):
+def validate_sql_connection(body: ValidateSqlRequest, agent_id: str = Depends(authenticate_agent)):
     from urllib.parse import urlparse
     from src.infrastructure.tools.sql_tool import validate_connection_string
     from sqlalchemy import create_engine, inspect
@@ -306,7 +306,7 @@ def validate_sql_connection(body: ValidateSqlRequest):
 
 
 @router.post("/parse-context", response_model=ParseContextResponse)
-def parse_context_from_text(body: ParseContextRequest):
+def parse_context_from_text(body: ParseContextRequest, agent_id: str = Depends(authenticate_agent)):
     dummy_msg = HistoryMessage(
         message_id="0", session_id="0", role="user",
         content=body.text, timestamp="", status="delivered",
@@ -319,11 +319,11 @@ def parse_context_from_text(body: ParseContextRequest):
         )
         parsed = json.loads(response.content)
     except Exception:
-        raise HTTPException(status_code=422, detail="Não foi possível estruturar o texto fornecido.")
+        raise HTTPException(status_code=422, detail="Could not parse the provided text into a context.")
 
     try:
         context = AgentContextBase.model_validate(parsed)
     except Exception:
-        raise HTTPException(status_code=422, detail="Resposta da IA fora do formato esperado.")
+        raise HTTPException(status_code=422, detail="AI response did not match the expected format.")
 
     return ParseContextResponse(context=context)

@@ -1,7 +1,7 @@
 """
-Gerencia o versionamento de contexto dos agentes.
-Cada criação ou atualização persiste um AgentContextRecord com versão incrementada,
-registra os campos alterados em changes e mantém o system prompt sincronizado no Redis.
+Manages agent context versioning.
+Each create or update persists an AgentContextRecord with an incremented version,
+records the changed fields in changes and keeps the system prompt in sync in Redis.
 """
 from datetime import datetime, timezone
 

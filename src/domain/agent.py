@@ -1,6 +1,6 @@
 """
-Entidades do domínio Agent: identidade, configuração de contexto e regras de escalação.
-Todos os campos de URL são str — tipos nativos; validação de formato fica nos schemas HTTP.
+Agent domain entities: identity, context configuration and escalation rules.
+All URL fields are plain str — format validation is handled in the HTTP schemas layer.
 """
 from typing import Any, Literal
 from pydantic import BaseModel

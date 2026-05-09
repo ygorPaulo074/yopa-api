@@ -1,12 +1,12 @@
 """
-Dependência FastAPI para autenticação de agente — suporta dois modos via AUTH_MODE:
+FastAPI dependency for agent authentication — supports two modes via AUTH_MODE:
 
-  standalone: Bearer {agent_id}.{secret} no header Authorization.
-              Usado em deploy direto sem o Yopa Proxy.
+  standalone: Bearer {agent_id}.{secret} in the Authorization header.
+              Used in direct deploys without the Yopa Proxy.
 
-  internal:   X-Agent-Id injetado pelo Yopa Proxy após validação da api_key.
-              A API confia no header sem re-validar credenciais — o proxy é
-              a única entrada e já autenticou antes de repassar.
+  internal:   X-Agent-Id injected by the Yopa Proxy after api_key validation.
+              The API trusts the header without re-validating credentials — the proxy
+              is the sole entry point and has already authenticated before forwarding.
 """
 from fastapi import HTTPException, Request, status
 

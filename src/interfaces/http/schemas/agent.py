@@ -1,6 +1,6 @@
 """
-Schemas de request e response dos endpoints /agent — criação, consulta, contexto,
-knowledge base, validação de AI/SQL e parse de contexto por texto livre.
+Request and response schemas for /agent endpoints — creation, retrieval, context,
+knowledge base, AI/SQL validation and free-text context parsing.
 """
 from pydantic import BaseModel
 from src.domain.agent import AgentContextBase

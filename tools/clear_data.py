@@ -1,5 +1,5 @@
 """
-Wrapper — use preferencialmente: invoke clear
+Compatibility wrapper — prefer: invoke clear
 """
 import subprocess
 import sys

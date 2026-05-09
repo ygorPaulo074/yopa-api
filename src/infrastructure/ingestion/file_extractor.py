@@ -1,6 +1,6 @@
 """
-Extrai registros estruturados de arquivos enviados pelo cliente.
-Suporta CSV, Excel, JSON, PDF, TXT e DOCX. Retorna lista de dicts para indexação.
+Extracts structured records from client-uploaded files.
+Supports CSV, Excel, JSON, PDF, TXT and DOCX. Returns a list of dicts for indexing.
 """
 import csv
 import io

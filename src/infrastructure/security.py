@@ -37,7 +37,7 @@ def sanitize_pii(text: str) -> str:
         anonymized = _anonymizer.anonymize(text=text, analyzer_results=results)
         return anonymized.text
     except Exception as exc:
-        logger.warning(f"sanitize_pii falhou, texto persiste sem sanitização: {exc}")
+        logger.warning(f"sanitize_pii failed, text returned without sanitisation: {exc}")
         return text
 
 
@@ -66,7 +66,7 @@ def _get_fernet() -> Fernet:
     from src.infrastructure.config import settings
     key = settings.SQL_ENCRYPTION_KEY
     if not key:
-        logger.warning("SQL_ENCRYPTION_KEY não configurada — usando chave efêmera (não persistente).")
+        logger.warning("SQL_ENCRYPTION_KEY not set — using an ephemeral key (non-persistent).")
         key = Fernet.generate_key().decode()
     _fernet_instance = Fernet(key.encode() if isinstance(key, str) else key)
     return _fernet_instance
@@ -85,12 +85,12 @@ def decrypt_secret(ciphertext: str) -> str:
     try:
         return _get_fernet().decrypt(ciphertext[len(_ENC_PREFIX):].encode()).decode()
     except InvalidToken as exc:
-        raise ValueError("Falha ao descriptografar credencial — chave inválida ou dado corrompido.") from exc
+        raise ValueError("Failed to decrypt credential — invalid key or corrupted data.") from exc
 
 
 def mask_connection_string(conn_str: str) -> str:
     if conn_str.startswith(_ENC_PREFIX):
-        return "[criptografado]"
+        return "[encrypted]"
     try:
         from urllib.parse import urlparse, urlunparse
         parsed = urlparse(conn_str)

@@ -1,6 +1,6 @@
 """
-Ferramenta de busca sobre arquivos indexados do agente (knowledge base).
-Executa busca por relevância simples (keyword matching) sobre os registros em memória.
+Search tool over the agent's indexed knowledge base files.
+Runs a simple relevance search (keyword matching) over the in-memory records.
 """
 from typing import Any
 
