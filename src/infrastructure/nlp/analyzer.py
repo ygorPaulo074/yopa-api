@@ -125,6 +125,12 @@ def detect_dominant_language(messages: list[HistoryMessage]) -> str | None:
     return Counter(langs).most_common(1)[0][0] if langs else None
 
 
+def preprocess_message(text: str) -> str:
+    """Correct spelling. Used before sending to AI to improve comprehension."""
+    lang = _detect_language(text)
+    return _correct_spelling(text, lang)
+
+
 def analyze(
     message_id: str,
     role: Literal["user", "assistant"],

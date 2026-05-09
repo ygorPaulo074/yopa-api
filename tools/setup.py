@@ -6,7 +6,10 @@ Run from the project root: python tools/setup.py
 import json
 import os
 import secrets
+import shutil
 import sys
+import threading
+import time
 from pathlib import Path
 
 import requests
@@ -115,7 +118,7 @@ ANALYZER_LANGUAGE_OPTIONS = {
 LOG_LEVEL_OPTIONS = {"1": "DEBUG", "2": "INFO", "3": "WARNING", "4": "ERROR"}
 
 
-# ── Terminal UI ────────────────────────────────────────────────────────────────
+# ── Terminal colors ────────────────────────────────────────────────────────────
 
 _RST  = "\033[0m"
 _BOLD = "\033[1m"
@@ -127,19 +130,91 @@ _RED  = "\033[31m"
 _YLW  = "\033[33m"
 _MAG  = "\033[35m"
 
-_DOT   = f"{_BLUE}●{_RST}"     # active step marker
-_DONE  = f"{_GRN}◆{_RST}"      # completed step marker
-_WARN  = f"{_YLW}▲{_RST}"      # warning
-_LINE  = f"{_DIM}│{_RST}"      # vertical connector
-_UNSEL = f"{_DIM}○{_RST}"      # unselected option
-_ARROW = f"{_CYAN}›{_RST}"     # input prompt arrow
+_DOT   = f"{_BLUE}●{_RST}"
+_DONE  = f"{_GRN}◆{_RST}"
+_WARN  = f"{_YLW}▲{_RST}"
+_LINE  = f"{_DIM}│{_RST}"
+_UNSEL = f"{_DIM}○{_RST}"
+_ARROW = f"{_CYAN}›{_RST}"
 
+
+# ── Animated corner spinner ────────────────────────────────────────────────────
+
+_SPIN_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+_TOTAL_STEPS = 15
+
+
+class _CornerSpinner:
+    """Animated blue dot progress bar rendered in the top-right corner."""
+
+    def __init__(self) -> None:
+        self._step  = 0
+        self._frame = 0
+        self._running = False
+        self._thread: threading.Thread | None = None
+        self._lock = threading.Lock()
+
+    def start(self) -> None:
+        self._running = True
+        self._thread = threading.Thread(target=self._loop, daemon=True)
+        self._thread.start()
+
+    def set_step(self, step: int) -> None:
+        with self._lock:
+            self._step = step
+
+    def finish(self) -> None:
+        with self._lock:
+            self._step = _TOTAL_STEPS
+        time.sleep(0.35)
+        self._running = False
+        if self._thread:
+            self._thread.join(timeout=0.8)
+        self._clear()
+
+    def _loop(self) -> None:
+        while self._running:
+            self._render()
+            with self._lock:
+                self._frame += 1
+            time.sleep(0.1)
+
+    def _render(self) -> None:
+        cols = shutil.get_terminal_size((80, 24)).columns
+        with self._lock:
+            step = self._step
+            frame_idx = self._frame % len(_SPIN_FRAMES)
+
+        spin = f"{_CYAN}{_SPIN_FRAMES[frame_idx]}{_RST}"
+        bar_w = 12
+        filled = round(bar_w * step / _TOTAL_STEPS)
+        bar = f"{_CYAN}{'●' * filled}{_DIM}{'○' * (bar_w - filled)}{_RST}"
+        label = f"{_DIM}{step}/{_TOTAL_STEPS}{_RST}"
+        # visible char count (no ANSI): 1 spinner + 1 space + bar_w + 2 spaces + label digits
+        visible = 2 + bar_w + 2 + len(f"{step}/{_TOTAL_STEPS}")
+        col = max(1, cols - visible)
+        sys.stdout.write(f"\033[s\033[1;{col}H{spin} {bar}  {label}\033[u")
+        sys.stdout.flush()
+
+    def _clear(self) -> None:
+        cols = shutil.get_terminal_size((80, 24)).columns
+        sys.stdout.write(f"\033[s\033[1;1H{' ' * cols}\033[u")
+        sys.stdout.flush()
+
+
+_spinner = _CornerSpinner()
+_step_counter = [0]
+
+
+# ── UI helpers ─────────────────────────────────────────────────────────────────
 
 def _header() -> None:
     print(f"\n  {_BLUE}{_BOLD}●  AI-ChatBot{_RST}  {_DIM}Setup wizard — run once before starting the server.{_RST}\n")
 
 
 def _step(title: str, hint: str = "") -> None:
+    _spinner.set_step(_step_counter[0])
+    _step_counter[0] += 1
     print(f"\n  {_DOT}  {_BOLD}{title}{_RST}")
     if hint:
         print(f"  {_LINE}  {_DIM}{hint}{_RST}")
@@ -226,6 +301,26 @@ def validate_database_url(url: str) -> bool:
     return False
 
 
+def _apply_schema_directly(database_url: str) -> bool:
+    sql_path = Path("scripts/schema.sql")
+    if not sql_path.exists():
+        return False
+    try:
+        from sqlalchemy import create_engine, text
+        engine = create_engine(database_url)
+        sql = sql_path.read_text()
+        with engine.connect() as conn:
+            for stmt in (s.strip() for s in sql.split(";")):
+                if stmt and not stmt.startswith("--"):
+                    conn.execute(text(stmt))
+            conn.commit()
+        engine.dispose()
+        return True
+    except Exception as e:
+        _err(f"Failed to apply schema: {str(e)[:200]}")
+        return False
+
+
 def _gen_encryption_key() -> str:
     try:
         from cryptography.fernet import Fernet
@@ -246,6 +341,8 @@ def run_setup() -> None:
     database_url = db_user = db_password = db_name = ""
     webhook_url = internal_token = data_path = ""
 
+    _step_counter[0] = 0
+    _spinner.start()
     _header()
 
     # ── Step 0: Deploy target ──────────────────────────────────────────────────
@@ -384,8 +481,13 @@ def run_setup() -> None:
                     break
                 _err("Password cannot be empty.")
             db_name = _ask("Database name", "chatbot")
+
+            print(f"\n  {_WARN}  {_DIM}Schema scripts are saved to{_RST}  {_CYAN}scripts/{_RST}  {_DIM}for two reasons:{_RST}")
+            print(f"  {_LINE}  {_DIM}1. Docker: Postgres auto-applies schema.sql on the first container start{_RST}")
+            print(f"  {_LINE}  {_DIM}2. Version control: track schema changes alongside your code{_RST}\n")
+
             while True:
-                gen = _ask("Generate schema scripts?", "no").lower()
+                gen = _ask("Generate schema scripts?", "yes").lower()
                 if gen in ("yes", "y"):
                     print()
                     _opt(1, "SQL Script")
@@ -394,8 +496,16 @@ def run_setup() -> None:
                     os.makedirs("scripts", exist_ok=True)
                     if schema_type == "1":
                         create_sql_scripts()
+                        if not is_docker:
+                            print(f"  {_LINE}  {_DIM}Applying schema to database...{_RST} ", end="", flush=True)
+                            if _apply_schema_directly(database_url):
+                                print(f"{_GRN}✓{_RST}")
+                            else:
+                                print(f"{_YLW}skipped{_RST}")
+                                _warn("Apply manually: psql $DATABASE_URL -f scripts/schema.sql")
                     elif schema_type == "2":
                         create_prisma_migrate()
+                        _warn("Run 'prisma db push' or 'prisma migrate deploy' to apply.")
                     break
                 elif gen in ("no", "n"):
                     _warn("Create the schema manually before starting.")
@@ -558,7 +668,7 @@ def run_setup() -> None:
             _done("containers", "up and running ✓")
             print(f"\n  {_LINE}  {_DIM}API available at{_RST}  {_CYAN}http://localhost:{port}{_RST}")
             if storage_type == "database":
-                print(f"  {_LINE}  {_DIM}Database initialized via schema.sql on first start.{_RST}")
+                print(f"  {_LINE}  {_DIM}Database schema applied automatically on first start.{_RST}")
             print(f"  {_LINE}  {_DIM}View logs:{_RST}  {_CYAN}docker compose logs -f api{_RST}")
             print(f"  {_LINE}  {_DIM}Stop:{_RST}  {_CYAN}docker compose down{_RST}")
         else:
@@ -566,6 +676,8 @@ def run_setup() -> None:
             _err("docker compose failed. Check the output above for details.")
 
     _raise_init_flag()
+
+    _spinner.finish()
     print(f"\n  {_DONE}  {_BOLD}Setup complete!{_RST}  {_DIM}Run{_RST}  {_CYAN}invoke run{_RST}  {_DIM}to start the server.{_RST}\n")
 
 

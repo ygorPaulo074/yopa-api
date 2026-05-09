@@ -72,7 +72,7 @@ def test(c, args=""):
     if flag_created:
         flag.write_text("invoke test")
 
-    cmd = ["python", "-m", "pytest", "src/tests/", "-v", "--tb=short"]
+    cmd = ["python", "-m", "pytest", "tests/", "-v", "--tb=short"]
     if args:
         cmd += args.split()
 
@@ -153,6 +153,18 @@ def prompt_preview(c, file):
     print("─" * 60)
     print(result)
     print("─" * 60 + "\n")
+
+
+@task(help={
+    "iterations": "Timed runs per scenario, warm-up excluded (default: 5)",
+    "real_ai": "Make actual LiteLLM calls (requires AI_API_KEY + AI_MODEL in .env)",
+})
+def benchmark(c, iterations=5, real_ai=False):
+    """Measure pipeline latency (sanitize_pii + spellcheck + optional AI) across 5 scenarios."""
+    cmd = f"python tools/latency_benchmark.py --iterations {iterations}"
+    if real_ai:
+        cmd += " --real-ai"
+    c.run(cmd, pty=True)
 
 
 @task

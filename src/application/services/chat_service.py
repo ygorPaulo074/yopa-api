@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from src.infrastructure.ai.client import AIClient
 from src.infrastructure.cache.redis_client import CacheClient
 from src.infrastructure.persistence.factory import get_driver
-from src.infrastructure.security import decrypt_secret
+from src.infrastructure.security import decrypt_secret, sanitize_pii
 from src.infrastructure.config import settings
 from src.infrastructure.tools.file_tool import FileTool, TOOL_DEFINITION as FILE_TOOL_DEF
 from src.infrastructure.tools.api_tool import ApiTool, TOOL_DEFINITION as API_TOOL_DEF
@@ -47,16 +47,18 @@ class ChatService:
         system_prompt = self.context_service.load_system_prompt(agent_id) or ""
         history = self.cache.get_history(session_id)
 
+        clean_message = sanitize_pii(message)
+
         now = datetime.now(timezone.utc).isoformat()
         user_msg_id = str(uuid.uuid4())
         user_msg = HistoryMessage(
             message_id=user_msg_id, session_id=session_id, role="user",
-            content=message, timestamp=now, status="delivered",
+            content=clean_message, timestamp=now, status="delivered",
         )
         self.cache.append_message(session_id, user_msg)
 
         threshold = self._sentiment_threshold(agent_id)
-        user_score = quality_analyzer.analyze(user_msg_id, "user", message, threshold)
+        user_score = quality_analyzer.analyze(user_msg_id, "user", clean_message, threshold)
 
         tools, tool_executor = self._build_tools(agent_id)
 
