@@ -8,10 +8,11 @@ Endpoints de chat e ciclo de vida de sessões:
 """
 import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from src.interfaces.http.auth import authenticate_agent
 from src.infrastructure.cache.redis_client import CacheClient
+from src.infrastructure.config import settings
 from src.infrastructure.persistence.factory import get_driver
 from src.domain.conversation import SessionRecord
 from src.domain.analytics import UserContextRecord
@@ -45,7 +46,19 @@ def _meta_to_session_record(meta, agent_id: str) -> SessionRecord:
 
 
 @router.post("", response_model=ChatResponse)
-def send_message(body: ChatRequest, agent_id: str = Depends(authenticate_agent)):
+def send_message(request: Request, body: ChatRequest, agent_id: str = Depends(authenticate_agent)):
+    allowed_header = request.headers.get("X-Allowed-Models", "")
+    if allowed_header:
+        allowed = [m.strip() for m in allowed_header.split(",") if m.strip()]
+        if allowed:
+            agent = get_driver().load_agent(agent_id)
+            model = (agent.ai_model if agent else None) or settings.AI_MODEL
+            if model not in allowed:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Model '{model}' is not in the allowed list for this subscription.",
+                )
+
     session_id = body.session_id or str(uuid.uuid4())
 
     ai = ChatService()
