@@ -25,3 +25,8 @@ app.include_router(agent_router)
 app.include_router(chat_router)
 app.include_router(data_router)
 app.include_router(admin_router)
+
+
+@app.get("/agent-test", include_in_schema=False)
+def chat_ui():
+    return FileResponse(_STATIC / "chat.html")
