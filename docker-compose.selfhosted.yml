@@ -28,6 +28,7 @@ services:
 
   api:
     build: .
+    image: ai-chatbot-api:${APP_VERSION}
     restart: unless-stopped
     env_file:
       - .env

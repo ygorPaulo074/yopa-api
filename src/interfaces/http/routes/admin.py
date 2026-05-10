@@ -30,11 +30,6 @@ class PurgeResponse(BaseModel):
     sessions_purged: int
 
 
-@router.get("/health")
-def health():
-    return {"status": "ok"}
-
-
 @router.post("/admin/purge", response_model=PurgeResponse)
 def purge_deleted(body: PurgeRequest, request: Request):
     _require_internal(request)

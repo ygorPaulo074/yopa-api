@@ -11,13 +11,13 @@ import sys
 import threading
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 import requests
 
 sys.path.insert(0, str(Path(__file__).parent))
 from deployment_scripts import (
     create_sql_scripts,
-    create_prisma_migrate,
     generate_dockerfile,
     generate_docker_compose,
 )
@@ -347,7 +347,7 @@ def run_setup() -> None:
 
     # ── Step 0: Deploy target ──────────────────────────────────────────────────
     _step("Deploy target", "Where will this run?")
-    _opt(1, "Local",  "run with 'invoke run' on this machine")
+    _opt(1, "Local",  "run directly on this machine with uvicorn")
     _opt(2, "Docker", "generates Dockerfile + docker-compose.yml")
     while True:
         c = _ask("Option", "1")
@@ -472,15 +472,40 @@ def run_setup() -> None:
             print(f"\n  {_LINE}  {_BOLD}Database configuration{_RST}")
             while True:
                 database_url = _ask("Connection string (e.g. postgresql://user:pass@host:5432/db)")
-                if validate_database_url(database_url):
-                    break
-            db_user = _ask("User", "postgres")
-            while True:
-                db_password = _ask("Password")
-                if db_password:
-                    break
-                _err("Password cannot be empty.")
-            db_name = _ask("Database name", "chatbot")
+                if not validate_database_url(database_url):
+                    continue
+
+                parsed     = urlparse(database_url)
+                p_scheme   = parsed.scheme or "postgresql"
+                p_user     = parsed.username or ""
+                p_password = parsed.password or ""
+                p_host     = parsed.hostname or "localhost"
+                p_port     = str(parsed.port) if parsed.port else "5432"
+                p_db       = parsed.path.lstrip("/")
+
+                print(f"\n  {_LINE}  {_BOLD}Detected:{_RST}")
+                print(f"  {_LINE}  {_DIM}user      {_RST}  {p_user or '(empty)'}")
+                print(f"  {_LINE}  {_DIM}password  {_RST}  {'•' * len(p_password) if p_password else '(empty)'}")
+                print(f"  {_LINE}  {_DIM}host      {_RST}  {p_host}")
+                print(f"  {_LINE}  {_DIM}port      {_RST}  {p_port}")
+                print(f"  {_LINE}  {_DIM}database  {_RST}  {p_db or '(empty)'}")
+
+                confirm = _ask("Correct?", "yes").lower()
+                if confirm not in ("yes", "y"):
+                    print(f"\n  {_LINE}  {_DIM}Press Enter to keep the current value.{_RST}")
+                    p_user     = _ask("User", p_user)
+                    p_password = _ask("Password", p_password)
+                    p_host     = _ask("Host", p_host)
+                    p_port     = _ask("Port", p_port)
+                    p_db       = _ask("Database", p_db)
+                    database_url = f"{p_scheme}://{p_user}:{p_password}@{p_host}:{p_port}/{p_db}"
+
+                db_user     = p_user
+                db_password = p_password
+                db_name     = p_db
+                masked      = database_url.replace(p_password, "•" * len(p_password)) if p_password else database_url
+                _done("connection string", masked)
+                break
 
             print(f"\n  {_WARN}  {_DIM}Schema scripts are saved to{_RST}  {_CYAN}scripts/{_RST}  {_DIM}for two reasons:{_RST}")
             print(f"  {_LINE}  {_DIM}1. Docker: Postgres auto-applies schema.sql on the first container start{_RST}")
@@ -489,23 +514,15 @@ def run_setup() -> None:
             while True:
                 gen = _ask("Generate schema scripts?", "yes").lower()
                 if gen in ("yes", "y"):
-                    print()
-                    _opt(1, "SQL Script")
-                    _opt(2, "Prisma Migrate")
-                    schema_type = _ask("Option")
                     os.makedirs("scripts", exist_ok=True)
-                    if schema_type == "1":
-                        create_sql_scripts()
-                        if not is_docker:
-                            print(f"  {_LINE}  {_DIM}Applying schema to database...{_RST} ", end="", flush=True)
-                            if _apply_schema_directly(database_url):
-                                print(f"{_GRN}✓{_RST}")
-                            else:
-                                print(f"{_YLW}skipped{_RST}")
-                                _warn("Apply manually: psql $DATABASE_URL -f scripts/schema.sql")
-                    elif schema_type == "2":
-                        create_prisma_migrate()
-                        _warn("Run 'prisma db push' or 'prisma migrate deploy' to apply.")
+                    create_sql_scripts()
+                    if not is_docker:
+                        print(f"  {_LINE}  {_DIM}Applying schema to database...{_RST} ", end="", flush=True)
+                        if _apply_schema_directly(database_url):
+                            print(f"{_GRN}✓{_RST}")
+                        else:
+                            print(f"{_YLW}skipped{_RST}")
+                            _warn("Apply manually: psql $DATABASE_URL -f scripts/schema.sql")
                     break
                 elif gen in ("no", "n"):
                     _warn("Create the schema manually before starting.")
@@ -614,7 +631,9 @@ def run_setup() -> None:
 
     # ── Write .env ─────────────────────────────────────────────────────────────
     print(f"\n  {_DOT}  {_BOLD}Writing .env...{_RST}")
+    app_version = Path("VERSION").read_text().strip() if Path("VERSION").exists() else "0.1.0"
     lines = [
+        f"APP_VERSION={app_version}",
         f"AI_API_KEY={api_key}",
         f"AI_MODEL={ai_model}",
         f"AI_TIMEOUT={timeout}",
@@ -630,6 +649,7 @@ def run_setup() -> None:
             f"DB_USER={db_user}",
             f"DB_PASSWORD={db_password}",
             f"DB_NAME={db_name}",
+            f"DB_PORT={p_port}",
         ]
     elif storage_type == "webhook":
         lines.append(f"WEBHOOK_URL={webhook_url}")
@@ -655,14 +675,36 @@ def run_setup() -> None:
     # ── Docker files ───────────────────────────────────────────────────────────
     if is_docker:
         print(f"\n  {_DOT}  {_BOLD}Generating Docker files...{_RST}")
-        generate_dockerfile(port)
+        if Path("Dockerfile").exists():
+            overwrite = _ask("Dockerfile already exists. Overwrite?", "no").lower()
+            if overwrite in ("yes", "y"):
+                generate_dockerfile(port)
+                _ok("Dockerfile generated.")
+            else:
+                print(f"  {_LINE}  {_DIM}Dockerfile kept as-is.{_RST}")
+        else:
+            generate_dockerfile(port)
+            _ok("Dockerfile generated.")
         generate_docker_compose(port, storage_type)
-        _ok("Dockerfile and docker-compose.yml generated.")
+        _ok("docker-compose.yml generated.")
 
         print(f"\n  {_DOT}  {_BOLD}Starting Docker containers...{_RST}")
-        print(f"  {_LINE}  {_DIM}Running: docker compose up --build -d{_RST}\n")
         import subprocess
-        result = subprocess.run(["docker", "compose", "up", "--build", "-d"])
+        version = Path("VERSION").read_text().strip() if Path("VERSION").exists() else "latest"
+        image_tag = f"ai-chatbot-api:{version}"
+        image_check = subprocess.run(
+            ["docker", "images", "-q", image_tag],
+            capture_output=True, text=True,
+        )
+        if image_check.stdout.strip():
+            print(f"  {_LINE}  {_DIM}Image {image_tag} already up to date — skipping build.{_RST}")
+            build_flag = []
+        else:
+            print(f"  {_LINE}  {_DIM}Image {image_tag} not found — building.{_RST}")
+            build_flag = ["--build"]
+        cmd = ["docker", "compose", "up"] + build_flag + ["-d"]
+        print(f"  {_LINE}  {_DIM}Running: {' '.join(cmd)}{_RST}\n")
+        result = subprocess.run(cmd)
         if result.returncode == 0:
             print()
             _done("containers", "up and running ✓")
@@ -671,6 +713,29 @@ def run_setup() -> None:
                 print(f"  {_LINE}  {_DIM}Database schema applied automatically on first start.{_RST}")
             print(f"  {_LINE}  {_DIM}View logs:{_RST}  {_CYAN}docker compose logs -f api{_RST}")
             print(f"  {_LINE}  {_DIM}Stop:{_RST}  {_CYAN}docker compose down{_RST}")
+
+            if build_flag:
+                old_out = subprocess.run(
+                    ["docker", "images", "--format", "{{.Repository}}:{{.Tag}}\t{{.ID}}", "ai-chatbot-api"],
+                    capture_output=True, text=True,
+                ).stdout.strip()
+                old_lines = [
+                    l for l in old_out.splitlines()
+                    if l and not l.startswith(f"ai-chatbot-api:{version}\t")
+                ]
+                if old_lines:
+                    print(f"\n  {_WARN}  {len(old_lines)} old image(s) found (keeping them allows rollback):")
+                    for line in old_lines:
+                        tag, img_id = line.split("\t", 1)
+                        print(f"  {_LINE}  {_DIM}{tag}   {img_id[:12]}{_RST}")
+                    clean = _ask("Remove old images?", "no").lower()
+                    if clean in ("yes", "y"):
+                        for line in old_lines:
+                            tag, img_id = line.split("\t", 1)
+                            subprocess.run(["docker", "rmi", img_id], capture_output=True)
+                            _ok(f"Removed {tag}")
+                    else:
+                        print(f"  {_LINE}  {_DIM}Kept. Remove manually: docker rmi <image-id>{_RST}")
         else:
             print()
             _err("docker compose failed. Check the output above for details.")
@@ -678,7 +743,7 @@ def run_setup() -> None:
     _raise_init_flag()
 
     _spinner.finish()
-    print(f"\n  {_DONE}  {_BOLD}Setup complete!{_RST}  {_DIM}Run{_RST}  {_CYAN}invoke run{_RST}  {_DIM}to start the server.{_RST}\n")
+    print(f"\n  {_DONE}  {_BOLD}Setup complete!{_RST}  {_DIM}Run{_RST}  {_CYAN}uvicorn main:app --reload{_RST}  {_DIM}to start the server.{_RST}\n")
 
 
 if __name__ == "__main__":

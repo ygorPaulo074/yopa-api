@@ -8,7 +8,7 @@ import requests
 from src.infrastructure.config import settings
 from src.infrastructure.persistence.base import PersistenceDriver
 from src.infrastructure.security import sanitize_pii
-from src.domain.agent import AgentRecord, AgentContextRecord, AgentSkillRecord
+from src.domain.agent import AgentRecord, AgentContextRecord
 from src.domain.conversation import HistoryMessage, SessionRecord, ScoreData
 from src.domain.knowledge import KnowledgeFileRecord
 from src.domain.analytics import UserContextRecord, InsightRecord
@@ -26,6 +26,9 @@ class WebhookDriver(PersistenceDriver):
         self._post({"type": "agent", "action": "save", "data": sanitized.model_dump()})
 
     def load_agent(self, agent_id: str) -> AgentRecord | None:
+        raise NotImplementedError("WebhookDriver não suporta leitura.")
+
+    def list_agents(self) -> list[AgentRecord]:
         raise NotImplementedError("WebhookDriver não suporta leitura.")
 
     def delete_agent(self, agent_id: str) -> None:
@@ -120,15 +123,6 @@ class WebhookDriver(PersistenceDriver):
     def delete_knowledge_file(self, agent_id: str, file_id: str) -> None:
         self._post({"type": "knowledge_file", "action": "delete",
                     "agent_id": agent_id, "file_id": file_id})
-
-    # ── Agent skills ───────────────────────────────────────────────────────────
-
-    def save_skill(self, agent_id: str, record: AgentSkillRecord) -> None:
-        self._post({"type": "agent_skill", "action": "save", "agent_id": agent_id,
-                    "data": record.model_dump(mode="json")})
-
-    def load_skill(self, agent_id: str) -> AgentSkillRecord | None:
-        raise NotImplementedError("WebhookDriver não suporta leitura.")
 
     # ── Soft delete purge ──────────────────────────────────────────────────────
 

@@ -18,7 +18,7 @@ from pathlib import Path
 from src.infrastructure.config import settings
 from src.infrastructure.persistence.base import PersistenceDriver
 from src.infrastructure.security import sanitize_pii
-from src.domain.agent import AgentRecord, AgentContextRecord, AgentSkillRecord
+from src.domain.agent import AgentRecord, AgentContextRecord
 from src.domain.conversation import HistoryMessage, SessionRecord, ScoreData
 from src.domain.knowledge import KnowledgeFileRecord
 from src.domain.analytics import UserContextRecord, InsightRecord
@@ -86,12 +86,6 @@ class LocalDriver(PersistenceDriver):
     def _knowledge_dir(self, agent_id: str) -> Path:
         return self._agent_dir(agent_id) / "knowledge"
 
-    def _skill_current(self, agent_id: str) -> Path:
-        return self._agent_dir(agent_id) / "skills" / "current.json"
-
-    def _skill_version(self, agent_id: str, version: int) -> Path:
-        return self._agent_dir(agent_id) / "skills" / f"v{version}.json"
-
     # ── Agent ──────────────────────────────────────────────────────────────────
 
     def save_agent(self, agent: AgentRecord) -> None:
@@ -104,6 +98,20 @@ class LocalDriver(PersistenceDriver):
             return None
         record = AgentRecord.model_validate(data)
         return None if record.deleted_at else record
+
+    def list_agents(self) -> list[AgentRecord]:
+        agents_dir = self._base / "agents"
+        if not agents_dir.exists():
+            return []
+        result = []
+        for agent_dir in agents_dir.iterdir():
+            if agent_dir.is_dir():
+                data = _read(agent_dir / "agent.json")
+                if data:
+                    record = AgentRecord.model_validate(data)
+                    if not record.deleted_at:
+                        result.append(record)
+        return sorted(result, key=lambda r: r.created_at, reverse=True)
 
     def delete_agent(self, agent_id: str) -> None:
         agent_dir = self._agent_dir(agent_id)
@@ -266,17 +274,6 @@ class LocalDriver(PersistenceDriver):
         path = self._knowledge_file(agent_id, file_id)
         if path.exists():
             path.unlink()
-
-    # ── Agent skills ───────────────────────────────────────────────────────────
-
-    def save_skill(self, agent_id: str, record: AgentSkillRecord) -> None:
-        data = record.model_dump(mode="json")
-        _write(self._skill_current(agent_id), data)
-        _write(self._skill_version(agent_id, record.version), data)
-
-    def load_skill(self, agent_id: str) -> AgentSkillRecord | None:
-        data = _read(self._skill_current(agent_id))
-        return AgentSkillRecord.model_validate(data) if data else None
 
     # ── Soft delete purge ──────────────────────────────────────────────────────
 

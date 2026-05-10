@@ -99,9 +99,3 @@ class AgentContextRecord(BaseModel):
     updated_at: str
 
 
-class AgentSkillRecord(BaseModel):
-    agent_id: str
-    version: int
-    system_prompt: str
-    context_snapshot: dict[str, Any]
-    compiled_at: str

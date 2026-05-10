@@ -88,6 +88,21 @@ class CacheClient:
         resolved_ttl = ttl or settings.SESSION_TTL
         self._redis.set(_meta_key(session_id), meta.model_dump_json(), ex=resolved_ttl)
 
+    # ── Ephemeral agents (dev only) ───────────────────────────
+
+    def set_ephemeral_agent(self, agent_id: str, name: str, secret_hash: str, system_prompt: str, ttl: int = 86400) -> None:
+        key = f"agent:{agent_id}:ephemeral"
+        self._redis.hset(key, mapping={"name": name, "secret_hash": secret_hash})
+        self._redis.expire(key, ttl)
+        self.set_context(agent_id, system_prompt)
+
+    def get_ephemeral_agent(self, agent_id: str) -> dict | None:
+        data = self._redis.hgetall(f"agent:{agent_id}:ephemeral")
+        return data if data else None
+
+    def is_ephemeral_agent(self, agent_id: str) -> bool:
+        return bool(self._redis.exists(f"agent:{agent_id}:ephemeral"))
+
     # ── Cleanup ────────────────────────────────────────────────
 
     def delete_session(self, session_id: str) -> None:

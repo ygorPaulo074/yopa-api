@@ -1,5 +1,5 @@
 """
-Deployment artifact generation: SQL schema, Prisma schema, Dockerfile, docker-compose.yml.
+Deployment artifact generation: SQL schema, Dockerfile, docker-compose.yml.
 Called by setup.py at the end of the initial configuration wizard.
 """
 import os
@@ -132,151 +132,6 @@ CREATE INDEX idx_agents_deleted_at         ON agents(deleted_at);
     print("  ✓ scripts/schema.sql generated.")
 
 
-# ── Prisma Schema ──────────────────────────────────────────────────────────────
-
-def create_prisma_migrate() -> None:
-    content = """// AI-ChatBot — Prisma Schema (PostgreSQL 14+)
-
-generator client {
-  provider = "prisma-client-js"
-}
-
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
-enum SentimentLabel { positive neutral negative }
-
-model Agent {
-  agentId        String    @id @map("agent_id")
-  name           String
-  owner          String
-  apiKeyHash     String    @unique @map("api_key_hash")
-  aiModel        String?   @map("ai_model")
-  aiApiKey       String?   @map("ai_api_key")
-  aiValidated    Boolean   @default(false) @map("ai_validated")
-  createdAt      DateTime  @map("created_at")
-  updatedAt      DateTime  @map("updated_at")
-  activeSince    DateTime? @map("active_since")
-  lastActivityAt DateTime? @map("last_activity_at")
-  deletedAt      DateTime? @map("deleted_at")
-
-  contexts       AgentContext[]
-  sessions       Session[]
-  userContexts   UserContext[]
-  knowledgeFiles KnowledgeFile[]
-
-  @@map("agents")
-}
-
-model AgentContext {
-  id        Int      @id @default(autoincrement())
-  agentId   String   @map("agent_id")
-  version   Int      @default(1)
-  context   Json     @default("{}")
-  changes   Json     @default("[]")
-  updatedAt DateTime @map("updated_at")
-  agent     Agent    @relation(fields: [agentId], references: [agentId], onDelete: Cascade)
-
-  @@unique([agentId, version])
-  @@map("agent_contexts")
-}
-
-model UserContext {
-  id          Int      @id @default(autoincrement())
-  userId      String   @map("user_id")
-  agentId     String   @map("agent_id")
-  createdAt   DateTime @map("created_at")
-  updatedAt   DateTime @map("updated_at")
-  segment     String?
-  language    String?
-  formAnswers Json?    @map("form_answers")
-  agent       Agent    @relation(fields: [agentId], references: [agentId], onDelete: Cascade)
-
-  @@unique([userId, agentId])
-  @@map("user_contexts")
-}
-
-model Session {
-  sessionId     String    @id @map("session_id")
-  agentId       String    @map("agent_id")
-  userId        String?   @map("user_id")
-  model         String
-  startedAt     DateTime  @map("started_at")
-  endedAt       DateTime? @map("ended_at")
-  totalMessages Int       @default(0) @map("total_messages")
-  inputTokens   Int       @default(0) @map("input_tokens")
-  outputTokens  Int       @default(0) @map("output_tokens")
-  totalTokens   Int       @default(0) @map("total_tokens")
-  resolved      Boolean   @default(false)
-  escalated     Boolean   @default(false)
-  deletedAt     DateTime? @map("deleted_at")
-  agent         Agent          @relation(fields: [agentId], references: [agentId], onDelete: Cascade)
-  history       SessionHistory?
-  scores        Score?
-  insight       Insight?
-
-  @@map("sessions")
-}
-
-model SessionHistory {
-  sessionId String @id @map("session_id")
-  agentId   String @map("agent_id")
-  messages  Json   @default("[]")
-  session   Session @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
-
-  @@map("session_history")
-}
-
-model Score {
-  sessionId              String          @id @map("session_id")
-  agentId                String          @map("agent_id")
-  messages               Json            @default("[]")
-  avgSentimentScore      Float?          @map("avg_sentiment_score")
-  sentimentLabel         SentimentLabel? @map("sentiment_label")
-  allTopics              Json?           @map("all_topics")
-  mainTopic              String?         @map("main_topic")
-  intent                 String?
-  avgUserMessageLength   Float?          @map("avg_user_message_length")
-  avgResponseTimeMs      Float?          @map("avg_response_time_ms")
-  updatedAt              DateTime        @map("updated_at")
-  session                Session         @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
-
-  @@map("scores")
-}
-
-model Insight {
-  sessionId        String   @id @map("session_id")
-  agentId          String   @map("agent_id")
-  generatedAt      DateTime @map("generated_at")
-  keyPoints        Json?    @map("key_points")
-  suggestedActions Json?    @map("suggested_actions")
-  summary          String?
-  session          Session  @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
-
-  @@map("insights")
-}
-
-model KnowledgeFile {
-  fileId     String   @id @map("file_id")
-  agentId    String   @map("agent_id")
-  filename   String
-  fileType   String   @map("file_type")
-  records    Json     @default("[]")
-  uploadedAt DateTime @map("uploaded_at")
-  updatedAt  DateTime @map("updated_at")
-  agent      Agent    @relation(fields: [agentId], references: [agentId], onDelete: Cascade)
-
-  @@map("knowledge_files")
-}
-"""
-    os.makedirs("scripts", exist_ok=True)
-    with open("scripts/schema.prisma", "w") as f:
-        f.write(content)
-    print("  ✓ scripts/schema.prisma generated.")
-
-
 # ── Dockerfile ─────────────────────────────────────────────────────────────────
 
 def generate_dockerfile(port: str = "8000") -> None:
@@ -284,9 +139,9 @@ def generate_dockerfile(port: str = "8000") -> None:
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY requirements*.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-RUN python -m spacy download en_core_web_sm
+RUN python -m spacy download en_core_web_sm && python -m spacy download pt_core_news_sm
 
 COPY . .
 
@@ -304,8 +159,14 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "{port}"]
 
 def generate_docker_compose(port: str = "8000", storage_type: str = "local") -> None:
     db_block = ""
+    db_migrate_block = ""
     db_depends = ""
     db_volume = ""
+    data_volume = ""
+    db_env_override = ""
+
+    if storage_type == "local":
+        data_volume = "      - ./data:/app/data\n"
 
     if storage_type == "database":
         db_block = """
@@ -318,29 +179,54 @@ def generate_docker_compose(port: str = "8000", storage_type: str = "local") -> 
       POSTGRES_DB: ${DB_NAME}
     volumes:
       - db_data:/var/lib/postgresql/data
-      - ./scripts/schema.sql:/docker-entrypoint-initdb.d/schema.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${DB_USER} -d $${DB_NAME}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
 """
-        db_depends = "\n      - db"
+        db_migrate_block = """
+  db-migrate:
+    image: postgres:16-alpine
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ./scripts/schema.sql:/schema.sql:ro
+    command: >
+      sh -c "if [ -f /schema.sql ];
+             then psql -h db -U ${DB_USER} -d ${DB_NAME} -f /schema.sql;
+             else echo 'schema.sql not found — skipping migration.'; fi"
+    restart: "no"
+"""
+        db_depends = """      db-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started"""
         db_volume = "  db_data:\n"
+        db_env_override = """    environment:
+      DATABASE_URL: "postgresql://${DB_USER}:${DB_PASSWORD}@db:${DB_PORT}/${DB_NAME}"
+"""
+
+    api_depends = f"""    depends_on:
+      - redis""" if storage_type != "database" else f"""    depends_on:
+{db_depends}"""
+
+    api_volumes = f"    volumes:\n{data_volume}" if data_volume else ""
 
     content = f"""services:
   api:
     build: .
+    image: ai-chatbot-api:${{APP_VERSION}}
     ports:
       - "{port}:{port}"
     env_file:
       - .env
-    depends_on:
-      - redis{db_depends}
+{db_env_override}{api_depends}
     restart: unless-stopped
-    volumes:
-      - ./data:/app/data
-{db_block}
+{api_volumes}{db_block}{db_migrate_block}
   redis:
     image: redis:7-alpine
     restart: unless-stopped

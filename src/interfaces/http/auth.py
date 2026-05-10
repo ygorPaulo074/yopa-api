@@ -33,7 +33,14 @@ async def authenticate_agent(request: Request) -> str:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key format")
 
     agent = get_driver().load_agent(agent_id)
-    if not agent or not verify_api_key(secret, agent.api_key_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+    if agent:
+        if not verify_api_key(secret, agent.api_key_hash):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+        return agent_id
 
-    return agent_id
+    from src.infrastructure.cache.redis_client import CacheClient
+    ephemeral = CacheClient().get_ephemeral_agent(agent_id)
+    if ephemeral and verify_api_key(secret, ephemeral["secret_hash"]):
+        return agent_id
+
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")

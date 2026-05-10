@@ -10,7 +10,7 @@ from src.infrastructure.persistence.base import PersistenceDriver
 from src.infrastructure.cache.redis_client import CacheClient
 from src.infrastructure.security import encrypt_secret
 from src.application.context_builder import build_system_prompt
-from src.domain.agent import AgentContextBase, AgentContextRecord, AgentSkillRecord, SqlDatasourceConfig
+from src.domain.agent import AgentContextBase, AgentContextRecord, SqlDatasourceConfig
 
 
 class ContextService:
@@ -43,13 +43,6 @@ class ContextService:
         )
         self.driver.save_context(record)
         self.cache.set_context(agent_id, system_prompt)
-        self.driver.save_skill(agent_id, AgentSkillRecord(
-            agent_id=agent_id,
-            version=1,
-            system_prompt=system_prompt,
-            context_snapshot=record.context.model_dump(mode="json"),
-            compiled_at=now,
-        ))
 
     def update_context(self, agent_id: str, new_context: AgentContextBase) -> AgentContextRecord:
         new_context = self._encrypt_sql_credentials(new_context)
@@ -70,13 +63,6 @@ class ContextService:
 
         system_prompt = build_system_prompt(new_context)
         self.cache.set_context(agent_id, system_prompt)
-        self.driver.save_skill(agent_id, AgentSkillRecord(
-            agent_id=agent_id,
-            version=record.version,
-            system_prompt=system_prompt,
-            context_snapshot=record.context.model_dump(mode="json"),
-            compiled_at=record.updated_at,
-        ))
 
         return record
 

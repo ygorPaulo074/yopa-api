@@ -15,6 +15,7 @@ Designed to run standalone (self-hosted, direct auth) or behind the Yopa Proxy (
 - [Knowledge Base](#knowledge-base)
 - [Data & Analytics](#data--analytics)
 - [Admin](#admin)
+- [Chat UI](#chat-ui)
 - [Configuration](#configuration)
 - [Self-hosted Deploy](#self-hosted-deploy)
 - [Storage](#storage)
@@ -346,10 +347,27 @@ These routes are not exposed to end users.
 
 ### `GET /health`
 
-Liveness check. No authentication required.
+Serves an HTML dashboard showing live server status (version, uptime, storage driver) and a table of the last 20 health checks. Auto-refreshes every 15 seconds. No authentication required.
+
+```
+http://localhost:8000/health
+```
+
+### `GET /health/status`
+
+JSON endpoint polled by the dashboard above. Also usable for external monitoring.
 
 ```json
-{ "status": "ok" }
+{
+  "status": "ok",
+  "version": "0.1.0",
+  "started_at": "2026-05-10T12:00:00+00:00",
+  "uptime_seconds": 3600.0,
+  "storage": "database",
+  "recent_checks": [
+    { "timestamp": "...", "status": "ok", "uptime_seconds": 3600.0 }
+  ]
+}
 ```
 
 ### `POST /admin/purge`
@@ -361,6 +379,68 @@ Hard-deletes agents and sessions with `deleted_at` before the given date. Requir
 **Response:** `{ "agents_purged": 3, "sessions_purged": 47 }`
 
 In a managed Yopa deployment, the Proxy runs this on a 7-day cron. In standalone mode, call it manually when needed.
+
+---
+
+## Development routes
+
+> **Only active when `RUN_MODE=development`.** All `/dev/*` routes and `/agent-manager` return `403 Forbidden` in production.
+
+### `GET /agent-manager`
+
+Full agent management UI — lists all agents, lets you chat with any one, inspect sessions, and view aggregate analytics. Opens in the browser:
+
+```
+http://localhost:8000/agent-manager
+```
+
+Selecting an agent rotates its API key and stores the new bearer token in memory for the session. Existing tokens for that agent are invalidated.
+
+### `GET /dev/agents`
+
+Lists all active (non-deleted) agents.
+
+```json
+[
+  {
+    "agent_id": "...",
+    "name": "Support Bot",
+    "owner": "acme",
+    "ai_model": "groq/llama-3.3-70b-versatile",
+    "ai_validated": true,
+    "created_at": "...",
+    "active_since": "...",
+    "last_activity_at": "..."
+  }
+]
+```
+
+### `POST /dev/token/{agent_id}`
+
+Rotates the agent's API key and returns a new bearer token. No authentication required (dev mode only).
+
+```json
+{ "bearer_token": "{agent_id}.{new_secret}" }
+```
+
+---
+
+## Chat UI
+
+> **Development only.** Not listed in the OpenAPI schema (`/docs`).
+
+`GET /chat-ui` serves a browser-based chat interface for testing agents without any external client. Open it directly after starting the API:
+
+```
+http://localhost:8000/chat-ui
+```
+
+Features:
+- Send messages and see AI responses in real time
+- Sidebar listing past sessions for the authenticated agent
+- Requires the same Bearer token used by the REST API (`Authorization: Bearer {agent_id}.{secret}`)
+
+Do not expose this route in production — it has no rate limiting or CSRF protection.
 
 ---
 
@@ -414,6 +494,34 @@ SQL_MAX_ROWS=50
 MAX_TOOL_ROUNDS=5
 LOG_LEVEL=INFO
 ```
+
+### Versioning
+
+The canonical version lives in `VERSION`. It propagates automatically to:
+
+- Docker image tag: `ai-chatbot-api:<VERSION>` (set in `docker-compose.yml` via `APP_VERSION`)
+- `GET /health/status` JSON response
+- `.env` `APP_VERSION` field (written by `inv setup`)
+
+**Bumping the version**
+
+```bash
+echo "0.2.0" > VERSION
+# rebuild — inv setup will detect the new tag and build automatically
+inv docker-build          # or: inv setup → Docker → build
+```
+
+**Old image cleanup**
+
+The API image is large (PyTorch, spaCy models). `inv setup` will prompt you after each new build whether to remove old tagged images or keep them for rollback. To clean up manually:
+
+```bash
+docker images ai-chatbot-api          # list all tagged versions
+docker rmi ai-chatbot-api:0.1.0       # remove a specific version
+docker image prune                    # remove untagged dangling layers
+```
+
+---
 
 ### Supported models
 

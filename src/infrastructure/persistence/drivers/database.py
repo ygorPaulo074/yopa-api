@@ -8,7 +8,7 @@ from sqlalchemy import create_engine, text
 from src.infrastructure.config import settings
 from src.infrastructure.persistence.base import PersistenceDriver
 from src.infrastructure.security import sanitize_pii
-from src.domain.agent import AgentRecord, AgentContextRecord, AgentSkillRecord
+from src.domain.agent import AgentRecord, AgentContextRecord
 from src.domain.conversation import HistoryMessage, SessionRecord, ScoreData
 from src.domain.knowledge import KnowledgeFileRecord
 from src.domain.analytics import UserContextRecord, InsightRecord
@@ -64,11 +64,18 @@ class DatabaseDriver(PersistenceDriver):
             return None
         return AgentRecord.model_validate(dict(row._mapping))
 
+    def list_agents(self) -> list[AgentRecord]:
+        with self._engine.connect() as conn:
+            rows = conn.execute(
+                text("SELECT * FROM agents WHERE deleted_at IS NULL ORDER BY created_at DESC")
+            ).fetchall()
+        return [AgentRecord.model_validate(dict(r._mapping)) for r in rows]
+
     def delete_agent(self, agent_id: str) -> None:
         with self._engine.begin() as conn:
             for table in (
                 "insights", "scores", "session_history", "sessions",
-                "knowledge_files", "agent_skills", "user_contexts", "agent_contexts", "agents",
+                "knowledge_files", "user_contexts", "agent_contexts", "agents",
             ):
                 conn.execute(
                     text(f"DELETE FROM {table} WHERE agent_id = :id"),
@@ -392,35 +399,6 @@ class DatabaseDriver(PersistenceDriver):
                 text("DELETE FROM knowledge_files WHERE agent_id = :agent_id AND file_id = :file_id"),
                 {"agent_id": agent_id, "file_id": file_id},
             )
-
-    # ── Agent skills ───────────────────────────────────────────────────────────
-
-    def save_skill(self, agent_id: str, record: AgentSkillRecord) -> None:
-        d = record.model_dump()
-        with self._engine.begin() as conn:
-            conn.execute(text("""
-                INSERT INTO agent_skills
-                    (agent_id, version, system_prompt, context_snapshot, compiled_at)
-                VALUES
-                    (:agent_id, :version, :system_prompt, :context_snapshot, :compiled_at)
-                ON CONFLICT (agent_id) DO UPDATE SET
-                    version          = EXCLUDED.version,
-                    system_prompt    = EXCLUDED.system_prompt,
-                    context_snapshot = EXCLUDED.context_snapshot,
-                    compiled_at      = EXCLUDED.compiled_at
-            """), {**d, "context_snapshot": _dumps(d["context_snapshot"])})
-
-    def load_skill(self, agent_id: str) -> AgentSkillRecord | None:
-        with self._engine.connect() as conn:
-            row = conn.execute(
-                text("SELECT * FROM agent_skills WHERE agent_id = :id"),
-                {"id": agent_id},
-            ).fetchone()
-        if not row:
-            return None
-        d = dict(row._mapping)
-        d["context_snapshot"] = _loads(d["context_snapshot"]) or {}
-        return AgentSkillRecord.model_validate(d)
 
     # ── Soft delete purge ──────────────────────────────────────────────────────
 
