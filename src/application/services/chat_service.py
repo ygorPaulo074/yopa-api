@@ -102,6 +102,8 @@ class ChatService:
             "total_tokens": meta.total_tokens + ai_response.usage.total_tokens,
         })
         self.cache.set_session_meta(session_id, meta)
+        if self.cache.is_ephemeral_agent(agent_id):
+            self.cache.add_ephemeral_session(agent_id, session_id)
         self._persist_snapshot(agent_id, session_id, meta, scores)
 
         return {
@@ -129,6 +131,8 @@ class ChatService:
         return record.context.fallback_message
 
     def _persist_snapshot(self, agent_id: str, session_id: str, meta: SessionMeta, scores) -> None:
+        if self.cache.is_ephemeral_agent(agent_id):
+            return
         driver = get_driver()
         driver.save_session(SessionRecord(
             session_id=meta.session_id, agent_id=agent_id, user_id=meta.user_id, model=meta.model,

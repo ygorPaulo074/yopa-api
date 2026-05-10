@@ -2,11 +2,11 @@
 Endpoints de dados e analytics.
 """
 import json
-from collections import Counter, defaultdict
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from src.application.services.analytics_service import AnalyticsService
 from src.interfaces.http.auth import authenticate_agent
 from src.infrastructure.cache.redis_client import CacheClient
 from src.infrastructure.persistence.factory import get_driver
@@ -14,21 +14,17 @@ from src.domain.analytics import InsightRecord
 from src.domain.conversation import HistoryMessage
 from src.infrastructure.config import settings
 from src.infrastructure.ai.client import AIClient
-from src.interfaces.http.schemas.chat import Message, ConversationEntry
 from src.interfaces.http.schemas.data import (
-    ChatListResponse, ChatSummary,
+    ChatListResponse,
     ChatDetailResponse, SessionDetail,
-    SentimentInsightResponse, SentimentData, SentimentPoint,
-    TopicsInsightResponse, TopicsData,
-    MetricsInsightResponse, MetricsData,
+    SentimentInsightResponse,
+    TopicsInsightResponse,
+    MetricsInsightResponse,
     SuggestionsInsightResponse, AIAnalysis,
     FullInsightResponse, AgentContextSnapshot,
     UserContextListResponse, UserContextSummary, UserProfile, UserContextResponse,
     AnalyticsResponse, AnalyticsSummaryResponse, AnalyticsPatternsResponse,
     AnalyticsSentimentResponse, AnalyticsUsersResponse, AnalyticsTimelineResponse,
-    AnalyticsSummary, AnalyticsPatterns, AnalyticsSentiment, AnalyticsUsers,
-    AnalyticsPeriod, TimelineEntry, TopicPattern, PeakHour,
-    SentimentDistribution, UserSegment,
 )
 
 router = APIRouter(prefix="/data", tags=["data"])
@@ -39,19 +35,8 @@ router = APIRouter(prefix="/data", tags=["data"])
 @router.get("/chat", response_model=ChatListResponse)
 def list_chats(agent_id: str = Depends(authenticate_agent)):
     sessions = get_driver().list_sessions(agent_id)
-    chats = [
-        ChatSummary(
-            session_id=s.session_id,
-            agent_id=s.agent_id,
-            started_at=s.started_at,
-            ended_at=s.ended_at,
-            total_messages=s.total_messages,
-            total_tokens=s.total_tokens,
-            resolved=s.resolved,
-            escalated=s.escalated,
-        )
-        for s in sessions
-    ]
+    service = AnalyticsService()
+    chats = [service.chat_summary(s) for s in sessions]
     return ChatListResponse(total=len(chats), chats=chats)
 
 
@@ -65,30 +50,10 @@ def get_chat(session_id: str, agent_id: str = Depends(authenticate_agent)):
     history = CacheClient().get_history(session_id)
     if not history:
         history = driver.load_history(agent_id, session_id)
-    conversation = [
-        ConversationEntry(message=Message(
-            id=m.message_id,
-            role=m.role,
-            content=m.content,
-            timestamp=m.timestamp,
-            status=m.status,
-            tokens=m.tokens,
-            response_time_ms=m.response_time_ms,
-        ))
-        for m in history
-    ]
+    service = AnalyticsService()
     return ChatDetailResponse(
-        session=SessionDetail(
-            session_id=session.session_id,
-            agent_id=session.agent_id,
-            started_at=session.started_at,
-            ended_at=session.ended_at,
-            total_messages=session.total_messages,
-            total_tokens=session.total_tokens,
-            resolved=session.resolved,
-            escalated=session.escalated,
-        ),
-        conversation=conversation,
+        session=SessionDetail(**service.chat_summary(session).model_dump()),
+        conversation=service.conversation_from_history(history),
     )
 
 
@@ -125,18 +90,9 @@ def _require_session(agent_id: str, session_id: str):
 def insight_sentiment(session_id: str, agent_id: str = Depends(authenticate_agent)):
     _require_session(agent_id, session_id)
     scores = _require_scores(agent_id, session_id)
-    progression = [
-        SentimentPoint(message_id=m.message_id, score=m.sentiment_score or 0.0)
-        for m in scores.messages
-        if m.role == "user" and m.sentiment_score is not None
-    ]
     return SentimentInsightResponse(
         session_id=session_id,
-        sentiment=SentimentData(
-            score=scores.avg_sentiment_score or 0.0,
-            label=scores.sentiment_label or "neutral",
-            progression=progression,
-        ),
+        sentiment=AnalyticsService().sentiment_from_scores(scores),
     )
 
 
@@ -146,11 +102,7 @@ def insight_topics(session_id: str, agent_id: str = Depends(authenticate_agent))
     scores = _require_scores(agent_id, session_id)
     return TopicsInsightResponse(
         session_id=session_id,
-        topics=TopicsData(
-            detected=scores.all_topics,
-            main_topic=scores.main_topic or "",
-            intent=scores.intent,
-        ),
+        topics=AnalyticsService().topics_from_scores(scores),
     )
 
 
@@ -158,37 +110,11 @@ def insight_topics(session_id: str, agent_id: str = Depends(authenticate_agent))
 def insight_metrics(session_id: str, agent_id: str = Depends(authenticate_agent)):
     session = _require_session(agent_id, session_id)
     scores = CacheClient().get_scores(session_id)
-
-    if session.resolved:
-        resolution = "resolved"
-    elif session.escalated:
-        resolution = "escalated"
-    else:
-        resolution = "open"
-
     history = CacheClient().get_history(session_id)
-    response_times = [m.response_time_ms for m in history if m.role == "assistant" and m.response_time_ms]
-    avg_rt = round(sum(response_times) / len(response_times), 1) if response_times else 0.0
-
-    time_to_escalation = None
-    if session.escalated and session.ended_at:
-        try:
-            start = datetime.fromisoformat(session.started_at)
-            end = datetime.fromisoformat(session.ended_at)
-            time_to_escalation = int((end - start).total_seconds())
-        except Exception:
-            pass
 
     return MetricsInsightResponse(
         session_id=session_id,
-        metrics=MetricsData(
-            total_messages=session.total_messages,
-            total_tokens=session.total_tokens,
-            avg_user_message_length=scores.avg_user_message_length or 0.0 if scores else 0.0,
-            avg_response_time_ms=avg_rt,
-            time_to_escalation_seconds=time_to_escalation,
-            resolution=resolution,
-        ),
+        metrics=AnalyticsService().metrics_from_session(session, scores, history),
     )
 
 
@@ -241,15 +167,7 @@ def insight_full(session_id: str, agent_id: str = Depends(authenticate_agent)):
     ai_data = _call_ai_for_insight(history_text)
     now = datetime.now(timezone.utc).isoformat()
 
-    response_times = [m.response_time_ms for m in history if m.role == "assistant" and m.response_time_ms]
-    avg_rt = round(sum(response_times) / len(response_times), 1) if response_times else 0.0
-
-    if session.resolved:
-        resolution = "resolved"
-    elif session.escalated:
-        resolution = "escalated"
-    else:
-        resolution = "open"
+    service = AnalyticsService()
 
     context_record = None
     try:
@@ -273,34 +191,14 @@ def insight_full(session_id: str, agent_id: str = Depends(authenticate_agent)):
     )
     get_driver().save_insight(agent_id, insight)
 
-    progression = [
-        SentimentPoint(message_id=m.message_id, score=m.sentiment_score or 0.0)
-        for m in scores.messages
-        if m.role == "user" and m.sentiment_score is not None
-    ]
-
     return FullInsightResponse(
         session_id=session_id,
         agent_id=agent_id,
         generated_at=now,
-        sentiment=SentimentData(
-            score=scores.avg_sentiment_score or 0.0,
-            label=scores.sentiment_label or "neutral",
-            progression=progression,
-        ),
-        topics=TopicsData(
-            detected=scores.all_topics,
-            main_topic=scores.main_topic or "",
-            intent=scores.intent,
-        ),
-        resolution=resolution,
-        metrics=MetricsData(
-            total_messages=session.total_messages,
-            total_tokens=session.total_tokens,
-            avg_user_message_length=scores.avg_user_message_length or 0.0,
-            avg_response_time_ms=avg_rt,
-            resolution=resolution,
-        ),
+        sentiment=service.sentiment_from_scores(scores),
+        topics=service.topics_from_scores(scores),
+        resolution=service.resolution(session),
+        metrics=service.metrics_from_session(session, scores, history),
         agent_context=context_record,
         ai_analysis=AIAnalysis(**ai_data),
     )
@@ -344,203 +242,13 @@ def delete_context(user_id: str, agent_id: str = Depends(authenticate_agent)):
     get_driver().delete_user_context(agent_id, user_id)
 
 
-# ── /data/analytics ────────────────────────────────────────────────────────────
-
-def _build_segments(driver, agent_id: str, sessions, unique_users: set) -> list[UserSegment]:
-    user_contexts = driver.list_user_contexts(agent_id)
-    relevant = [uc for uc in user_contexts if uc.user_id in unique_users and uc.segment]
-    seg_counts: Counter = Counter(uc.segment for uc in relevant)
-    seg_users: dict[str, set] = {}
-    for uc in relevant:
-        seg_users.setdefault(uc.segment, set()).add(uc.user_id)
-    result = []
-    for seg, count in seg_counts.most_common():
-        seg_session_ids = {s.session_id for s in sessions if s.user_id in seg_users.get(seg, set())}
-        seg_sessions = [s for s in sessions if s.session_id in seg_session_ids]
-        resolved_count = sum(1 for s in seg_sessions if s.resolved)
-        resolution_rate = round(resolved_count / len(seg_sessions), 4) if seg_sessions else 0.0
-        result.append(UserSegment(segment=seg, total_users=count, resolution_rate=resolution_rate))
-    return result
-
-
-def _build_analytics(agent_id: str, from_: str | None, to: str | None):
-    driver = get_driver()
-    sessions = driver.list_sessions(agent_id)
-
-    if from_:
-        sessions = [s for s in sessions if s.started_at >= from_]
-    if to:
-        sessions = [s for s in sessions if s.started_at <= to]
-
-    total = len(sessions)
-    now = datetime.now(timezone.utc).isoformat()
-
-    if total == 0:
-        empty_summary = AnalyticsSummary(
-            total_chats=0, total_messages=0, total_users=0,
-            avg_messages_per_chat=0.0, avg_chat_duration_seconds=0.0,
-            avg_response_time_ms=0.0, resolution_rate=0.0, escalation_rate=0.0,
-            total_tokens_used=0, avg_tokens_per_chat=0.0,
-        )
-        empty_patterns = AnalyticsPatterns(
-            most_common_topics=[], most_common_unresolved_topics=[],
-            peak_hours=[], peak_days=[], avg_messages_to_resolution=0.0,
-            avg_messages_to_escalation=0.0,
-        )
-        return {
-            "generated_at": now,
-            "period": AnalyticsPeriod(from_=from_, to=to),
-            "summary": empty_summary,
-            "patterns": empty_patterns,
-            "sentiment": AnalyticsSentiment(avg_score=0.0, distribution=SentimentDistribution(positive=0.0, neutral=1.0, negative=0.0)),
-            "users": AnalyticsUsers(new_users=0, returning_users=0, avg_chats_per_user=0.0, segments=[]),
-            "timeline": [],
-        }
-
-    total_msgs = sum(s.total_messages for s in sessions)
-    total_tokens = sum(s.total_tokens for s in sessions)
-    resolved = sum(1 for s in sessions if s.resolved)
-    escalated = sum(1 for s in sessions if s.escalated)
-    unique_users = {s.user_id for s in sessions if s.user_id}
-    returning = {uid for uid in unique_users if sum(1 for s in sessions if s.user_id == uid) > 1}
-
-    durations = []
-    for s in sessions:
-        if s.started_at and s.ended_at:
-            try:
-                start = datetime.fromisoformat(s.started_at)
-                end = datetime.fromisoformat(s.ended_at)
-                durations.append((end - start).total_seconds())
-            except Exception:
-                pass
-
-    avg_duration = round(sum(durations) / len(durations), 1) if durations else 0.0
-
-    session_ids = {s.session_id for s in sessions}
-    resolved_map = {s.session_id: s.resolved for s in sessions}
-    all_scores = [sc for sc in driver.load_all_scores(agent_id) if sc.session_id in session_ids]
-
-    topic_counts: Counter = Counter()
-    unresolved_topic_counts: Counter = Counter()
-    for sc in all_scores:
-        for t in sc.all_topics:
-            topic_counts[t] += 1
-            if not resolved_map.get(sc.session_id, True):
-                unresolved_topic_counts[t] += 1
-
-    sentiment_values = [sc.avg_sentiment_score for sc in all_scores if sc.avg_sentiment_score is not None]
-    avg_sentiment = round(sum(sentiment_values) / len(sentiment_values), 4) if sentiment_values else 0.0
-
-    rt_values = [sc.avg_response_time_ms for sc in all_scores if sc.avg_response_time_ms > 0]
-    avg_rt_global = round(sum(rt_values) / len(rt_values), 1) if rt_values else 0.0
-
-    sentiment_labels = [sc.sentiment_label for sc in all_scores if sc.sentiment_label]
-    label_counter = Counter(sentiment_labels)
-    label_total = len(sentiment_labels) or 1
-    distribution = SentimentDistribution(
-        positive=round(label_counter.get("positive", 0) / label_total, 4),
-        neutral=round(label_counter.get("neutral", 0) / label_total, 4),
-        negative=round(label_counter.get("negative", 0) / label_total, 4),
-    )
-
-    hour_counts: Counter = Counter()
-    day_counts: Counter = Counter()
-    for s in sessions:
-        try:
-            dt = datetime.fromisoformat(s.started_at)
-            hour_counts[f"{dt.hour:02d}:00"] += 1
-            day_counts[dt.strftime("%A")] += 1
-        except Exception:
-            pass
-
-    peak_hours = [PeakHour(hour=h, avg_chats=c) for h, c in hour_counts.most_common(3)]
-    peak_days = [d for d, _ in day_counts.most_common(3)]
-
-    resolved_msgs = [s.total_messages for s in sessions if s.resolved]
-    escalated_msgs = [s.total_messages for s in sessions if s.escalated]
-
-    daily: dict = defaultdict(lambda: {"total_chats": 0, "resolved": 0, "escalated": 0, "users": set(), "tokens": 0, "sentiments": [], "response_times": []})
-    for s in sessions:
-        try:
-            date = datetime.fromisoformat(s.started_at).strftime("%Y-%m-%d")
-            daily[date]["total_chats"] += 1
-            daily[date]["resolved"] += int(s.resolved)
-            daily[date]["escalated"] += int(s.escalated)
-            if s.user_id:
-                daily[date]["users"].add(s.user_id)
-            daily[date]["tokens"] += s.total_tokens
-        except Exception:
-            pass
-
-    for sc in all_scores:
-        if sc.updated_at:
-            try:
-                date = datetime.fromisoformat(sc.updated_at).strftime("%Y-%m-%d")
-                if sc.avg_sentiment_score is not None:
-                    daily[date]["sentiments"].append(sc.avg_sentiment_score)
-                if sc.avg_response_time_ms > 0:
-                    daily[date]["response_times"].append(sc.avg_response_time_ms)
-            except Exception:
-                pass
-
-    timeline = []
-    for date in sorted(daily.keys()):
-        d = daily[date]
-        sents = d["sentiments"]
-        rts = d["response_times"]
-        timeline.append(TimelineEntry(
-            date=date,
-            total_chats=d["total_chats"],
-            resolved=d["resolved"],
-            escalated=d["escalated"],
-            new_users=len(d["users"]),
-            total_tokens=d["tokens"],
-            avg_response_time_ms=round(sum(rts) / len(rts), 1) if rts else 0.0,
-            avg_sentiment_score=round(sum(sents) / len(sents), 4) if sents else 0.0,
-        ))
-
-    return {
-        "generated_at": now,
-        "period": AnalyticsPeriod(from_=from_, to=to),
-        "summary": AnalyticsSummary(
-            total_chats=total,
-            total_messages=total_msgs,
-            total_users=len(unique_users),
-            avg_messages_per_chat=round(total_msgs / total, 1),
-            avg_chat_duration_seconds=avg_duration,
-            avg_response_time_ms=avg_rt_global,
-            resolution_rate=round(resolved / total, 4),
-            escalation_rate=round(escalated / total, 4),
-            total_tokens_used=total_tokens,
-            avg_tokens_per_chat=round(total_tokens / total, 1),
-        ),
-        "patterns": AnalyticsPatterns(
-            most_common_topics=[TopicPattern(topic=t, count=c) for t, c in topic_counts.most_common(10)],
-            most_common_unresolved_topics=[TopicPattern(topic=t, count=c) for t, c in unresolved_topic_counts.most_common(5)],
-            peak_hours=peak_hours,
-            peak_days=peak_days,
-            avg_messages_to_resolution=round(sum(resolved_msgs) / len(resolved_msgs), 1) if resolved_msgs else 0.0,
-            avg_messages_to_escalation=round(sum(escalated_msgs) / len(escalated_msgs), 1) if escalated_msgs else 0.0,
-        ),
-        "sentiment": AnalyticsSentiment(avg_score=avg_sentiment, distribution=distribution),
-        "users": AnalyticsUsers(
-            new_users=len(unique_users) - len(returning),
-            returning_users=len(returning),
-            avg_chats_per_user=round(total / len(unique_users), 1) if unique_users else 0.0,
-            segments=_build_segments(driver, agent_id, sessions, unique_users),
-        ),
-        "timeline": timeline,
-    }
-
-
 @router.get("/analytics", response_model=AnalyticsResponse)
 def analytics_full(
     agent_id: str = Depends(authenticate_agent),
     from_: str | None = Query(None, alias="from"),
     to: str | None = None,
 ):
-    data = _build_analytics(agent_id, from_, to)
-    return AnalyticsResponse(**data)
+    return AnalyticsService().build_persistent_analytics(agent_id, from_, to)
 
 
 @router.get("/analytics/summary", response_model=AnalyticsSummaryResponse)
@@ -549,8 +257,8 @@ def analytics_summary(
     from_: str | None = Query(None, alias="from"),
     to: str | None = None,
 ):
-    data = _build_analytics(agent_id, from_, to)
-    return AnalyticsSummaryResponse(generated_at=data["generated_at"], period=data["period"], summary=data["summary"])
+    data = AnalyticsService().build_persistent_analytics(agent_id, from_, to)
+    return AnalyticsSummaryResponse(generated_at=data.generated_at, period=data.period, summary=data.summary)
 
 
 @router.get("/analytics/patterns", response_model=AnalyticsPatternsResponse)
@@ -559,8 +267,8 @@ def analytics_patterns(
     from_: str | None = Query(None, alias="from"),
     to: str | None = None,
 ):
-    data = _build_analytics(agent_id, from_, to)
-    return AnalyticsPatternsResponse(generated_at=data["generated_at"], period=data["period"], patterns=data["patterns"])
+    data = AnalyticsService().build_persistent_analytics(agent_id, from_, to)
+    return AnalyticsPatternsResponse(generated_at=data.generated_at, period=data.period, patterns=data.patterns)
 
 
 @router.get("/analytics/sentiment", response_model=AnalyticsSentimentResponse)
@@ -569,8 +277,8 @@ def analytics_sentiment(
     from_: str | None = Query(None, alias="from"),
     to: str | None = None,
 ):
-    data = _build_analytics(agent_id, from_, to)
-    return AnalyticsSentimentResponse(generated_at=data["generated_at"], period=data["period"], sentiment=data["sentiment"])
+    data = AnalyticsService().build_persistent_analytics(agent_id, from_, to)
+    return AnalyticsSentimentResponse(generated_at=data.generated_at, period=data.period, sentiment=data.sentiment)
 
 
 @router.get("/analytics/users", response_model=AnalyticsUsersResponse)
@@ -579,8 +287,8 @@ def analytics_users(
     from_: str | None = Query(None, alias="from"),
     to: str | None = None,
 ):
-    data = _build_analytics(agent_id, from_, to)
-    return AnalyticsUsersResponse(generated_at=data["generated_at"], period=data["period"], users=data["users"])
+    data = AnalyticsService().build_persistent_analytics(agent_id, from_, to)
+    return AnalyticsUsersResponse(generated_at=data.generated_at, period=data.period, users=data.users)
 
 
 @router.get("/analytics/timeline", response_model=AnalyticsTimelineResponse)
@@ -589,5 +297,5 @@ def analytics_timeline(
     from_: str | None = Query(None, alias="from"),
     to: str | None = None,
 ):
-    data = _build_analytics(agent_id, from_, to)
-    return AnalyticsTimelineResponse(generated_at=data["generated_at"], period=data["period"], timeline=data["timeline"])
+    data = AnalyticsService().build_persistent_analytics(agent_id, from_, to)
+    return AnalyticsTimelineResponse(generated_at=data.generated_at, period=data.period, timeline=data.timeline)

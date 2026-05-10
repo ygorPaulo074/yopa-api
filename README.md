@@ -42,6 +42,12 @@ Or with Docker:
 docker compose up
 ```
 
+After changing Python or static UI files, rebuild the Docker image before testing the containerized server:
+
+```bash
+docker compose up --build
+```
+
 For a production self-hosted deploy with Caddy and automatic TLS, see [Self-hosted Deploy](#self-hosted-deploy).
 
 ---
@@ -384,17 +390,17 @@ In a managed Yopa deployment, the Proxy runs this on a 7-day cron. In standalone
 
 ## Development routes
 
-> **Only active when `RUN_MODE=development`.** All `/dev/*` routes and `/agent-manager` return `403 Forbidden` in production.
+> **Only active when `RUN_MODE=development`.** All `/dev/*` routes and `/agent-test` return `403 Forbidden` outside development mode.
 
-### `GET /agent-manager`
+### `GET /agent-test`
 
-Full agent management UI — lists all agents, lets you chat with any one, inspect sessions, and view aggregate analytics. Opens in the browser:
+Agent test UI — lists persisted agents, creates Redis-only ephemeral agents, lets you chat, inspect sessions, and view durable or temporary analytics. Opens in the browser:
 
 ```
-http://localhost:8000/agent-manager
+http://localhost:8000/agent-test
 ```
 
-Selecting an agent rotates its API key and stores the new bearer token in memory for the session. Existing tokens for that agent are invalidated.
+Selecting a persisted agent rotates its API key and stores the new bearer token in memory for the browser session. Existing tokens for that agent are invalidated.
 
 ### `GET /dev/agents`
 
@@ -423,22 +429,62 @@ Rotates the agent's API key and returns a new bearer token. No authentication re
 { "bearer_token": "{agent_id}.{new_secret}" }
 ```
 
+### `POST /dev/agent/ephemeral`
+
+Creates a Redis-only test agent with a 24 hour TTL. It does not write an agent record to the configured persistence driver.
+
+```json
+{
+  "name": "Tmp Support Agent",
+  "context": {
+    "tone": "informal",
+    "language": "pt-BR",
+    "segment": "support"
+  }
+}
+```
+
+**Response:**
+
+```json
+{
+  "agent_id": "...",
+  "name": "Tmp Support Agent",
+  "api_key": "{agent_id}.{secret}"
+}
+```
+
+### Ephemeral session analytics
+
+These endpoints require the ephemeral agent Bearer token and are development-only:
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/dev/agent/ephemeral/sessions` | Lists live Redis sessions for the ephemeral agent |
+| `GET` | `/dev/agent/ephemeral/sessions/{session_id}` | Returns transcript, sentiment, topics and metrics from Redis |
+| `GET` | `/dev/agent/ephemeral/analytics` | Aggregates temporary analytics from Redis |
+
+Ephemeral analytics are intentionally not written to durable storage. They expire with the Redis keys.
+
 ---
 
 ## Chat UI
 
 > **Development only.** Not listed in the OpenAPI schema (`/docs`).
 
-`GET /chat-ui` serves a browser-based chat interface for testing agents without any external client. Open it directly after starting the API:
+`GET /agent-test` serves a browser-based chat interface for testing agents without any external client. Open it directly after starting the API:
 
 ```
-http://localhost:8000/chat-ui
+http://localhost:8000/agent-test
 ```
 
 Features:
 - Send messages and see AI responses in real time
-- Sidebar listing past sessions for the authenticated agent
-- Requires the same Bearer token used by the REST API (`Authorization: Bearer {agent_id}.{secret}`)
+- Sidebar listing persisted agents in development mode
+- One-click Redis-only ephemeral agent generation
+- Session and analytics panels for persisted agents
+- Temporary Redis-backed session and analytics panels for ephemeral agents
+- Manual Bearer token loading with the same API key format used by the REST API (`Authorization: Bearer {agent_id}.{secret}`)
 
 Do not expose this route in production — it has no rate limiting or CSRF protection.
 
@@ -597,6 +643,8 @@ Required. Holds all live session state — no disk I/O per message.
 | `session:{id}:history` | `SESSION_TTL` | Message list |
 | `session:{id}:scores` | `SESSION_TTL` | NLP scores |
 | `session:{id}:meta` | `SESSION_TTL` | Session metadata |
+| `agent:{id}:ephemeral` | 24 h | Ephemeral agent metadata and secret hash |
+| `agent:{id}:ephemeral:sessions` | 24 h | Redis set of session ids for dev-only ephemeral analytics |
 
 Supported URL formats:
 ```

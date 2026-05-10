@@ -16,6 +16,7 @@ import json
 import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from src.infrastructure.cache.redis_client import CacheClient
 
 from src.infrastructure.ai.client import AIClient
 from src.interfaces.http.auth import authenticate_agent
@@ -54,9 +55,24 @@ def create_agent(body: AgentCreateRequest):
 @router.get("", response_model=AgentGetResponse)
 def get_agent(agent_id: str = Depends(authenticate_agent)):
     agent = AgentService().get_agent(agent_id)
-    if not agent:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
-    return AgentGetResponse(**agent.model_dump())
+    if agent:
+        return AgentGetResponse(**agent.model_dump())
+
+    ephemeral = CacheClient().get_ephemeral_agent(agent_id)
+    if ephemeral:
+        now = datetime.now(timezone.utc).isoformat()
+        return AgentGetResponse(
+            agent_id=agent_id,
+            name=ephemeral.get("name", "Ephemeral Agent"),
+            owner=ephemeral.get("owner", "ephemeral"),
+            ai_model=ephemeral.get("ai_model") or settings.AI_MODEL or None,
+            ai_validated=bool(settings.AI_MODEL),
+            created_at=ephemeral.get("created_at", now),
+            updated_at=ephemeral.get("updated_at", ephemeral.get("created_at", now)),
+            active_since=ephemeral.get("active_since", ephemeral.get("created_at")),
+            last_activity_at=ephemeral.get("last_activity_at"),
+        )
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
 
 @router.patch("", response_model=AgentPatchResponse)

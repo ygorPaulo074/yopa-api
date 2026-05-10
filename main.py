@@ -3,10 +3,7 @@ AI-ChatBot application entry point.
 Rate limiting and CORS are handled by the Yopa Proxy (integrated deploy)
 or by Caddy (self-hosted deploy via docker-compose.selfhosted.yml).
 """
-from pathlib import Path
-
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
 
 from src.interfaces.http.routes.agent import router as agent_router
 from src.interfaces.http.routes.chat import router as chat_router
@@ -14,8 +11,6 @@ from src.interfaces.http.routes.data import router as data_router
 from src.interfaces.http.routes.admin import router as admin_router
 from src.interfaces.http.routes.health import router as health_router
 from src.interfaces.http.routes.dev import router as dev_router
-
-_STATIC = Path(__file__).parent / "src" / "static"
 
 app = FastAPI()
 
