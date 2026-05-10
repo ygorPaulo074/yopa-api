@@ -123,6 +123,9 @@ def end_session(session_id: str, agent_id: str = Depends(authenticate_agent)):
     meta = meta.model_copy(update={"ended_at": now})
     cache.set_session_meta(session_id, meta)
 
+    if cache.is_ephemeral_agent(agent_id):
+        return SessionEndResponse(session_id=session_id, ended_at=now)
+
     driver = get_driver()
     driver.save_session(_meta_to_session_record(meta, agent_id))
 
@@ -174,6 +177,9 @@ def resolve_session(session_id: str, agent_id: str = Depends(authenticate_agent)
     meta = meta.model_copy(update={"resolved": True})
     cache.set_session_meta(session_id, meta)
 
+    if cache.is_ephemeral_agent(agent_id):
+        return SessionResolveResponse(session_id=session_id, resolved=True, updated_at=now)
+
     driver = get_driver()
     driver.save_session(_meta_to_session_record(meta, agent_id))
 
@@ -190,6 +196,9 @@ def escalate_session(session_id: str, agent_id: str = Depends(authenticate_agent
     now = datetime.now(timezone.utc).isoformat()
     meta = meta.model_copy(update={"escalated": True})
     cache.set_session_meta(session_id, meta)
+
+    if cache.is_ephemeral_agent(agent_id):
+        return SessionEscalateResponse(session_id=session_id, escalated=True, updated_at=now)
 
     driver = get_driver()
     driver.save_session(_meta_to_session_record(meta, agent_id))

@@ -33,6 +33,12 @@ def _require_dev() -> None:
             detail="This endpoint is only available in development mode (RUN_MODE=development).",
         )
 
+
+@router.get("/agent-test", include_in_schema=False)
+def agent_test_ui():
+    _require_dev()
+    return FileResponse(_STATIC / "chat.html")
+
 @router.get("/dev/agents")
 def list_agents():
     _require_dev()
