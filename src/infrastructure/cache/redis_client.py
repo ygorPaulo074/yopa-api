@@ -32,6 +32,9 @@ def _scores_key(session_id: str) -> str:
 def _meta_key(session_id: str) -> str:
     return f"session:{session_id}:meta"
 
+def _ephemeral_sessions_key(agent_id: str) -> str:
+    return f"agent:{agent_id}:ephemeral:sessions"
+
 
 class CacheClient:
 
@@ -90,9 +93,30 @@ class CacheClient:
 
     # ── Ephemeral agents (dev only) ───────────────────────────
 
-    def set_ephemeral_agent(self, agent_id: str, name: str, secret_hash: str, system_prompt: str, ttl: int = 86400) -> None:
+    def set_ephemeral_agent(
+        self,
+        agent_id: str,
+        name: str,
+        secret_hash: str,
+        system_prompt: str,
+        *,
+        owner: str = "ephemeral",
+        ai_model: str | None = None,
+        created_at: str,
+        ttl: int = 86400,
+    ) -> None:
         key = f"agent:{agent_id}:ephemeral"
-        self._redis.hset(key, mapping={"name": name, "secret_hash": secret_hash})
+        mapping = {
+            "name": name,
+            "secret_hash": secret_hash,
+            "owner": owner,
+            "created_at": created_at,
+            "updated_at": created_at,
+            "active_since": created_at,
+        }
+        if ai_model:
+            mapping["ai_model"] = ai_model
+        self._redis.hset(key, mapping=mapping)
         self._redis.expire(key, ttl)
         self.set_context(agent_id, system_prompt)
 
@@ -102,6 +126,16 @@ class CacheClient:
 
     def is_ephemeral_agent(self, agent_id: str) -> bool:
         return bool(self._redis.exists(f"agent:{agent_id}:ephemeral"))
+
+    def add_ephemeral_session(self, agent_id: str, session_id: str, ttl: int = 86400) -> None:
+        key = _ephemeral_sessions_key(agent_id)
+        with self._redis.pipeline() as pipe:
+            pipe.sadd(key, session_id)
+            pipe.expire(key, ttl)
+            pipe.execute()
+
+    def list_ephemeral_sessions(self, agent_id: str) -> list[str]:
+        return sorted(self._redis.smembers(_ephemeral_sessions_key(agent_id)))
 
     # ── Cleanup ────────────────────────────────────────────────
 

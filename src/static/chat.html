@@ -54,6 +54,10 @@
     }
     .toggle-json { font-size: 0.62rem; color: #333; cursor: pointer; text-decoration: underline; }
     .toggle-json:hover { color: #666; }
+    .header-btn {
+      height: 24px; padding: 0 8px; font-size: 0.6rem;
+      color: #555; background: #111; border-color: #1e1e1e;
+    }
 
     /* ── Layout ──────────────────────────────────────────────── */
     #layout { display: grid; grid-template-columns: 260px 1fr; flex: 1; overflow: hidden; }
@@ -88,6 +92,8 @@
     }
     button:hover:not(:disabled) { background: #202020; color: #999; border-color: #333; }
     button:disabled { opacity: .35; cursor: not-allowed; }
+    .btn-ghost { background: transparent; border-color: #1a1a1a; color: #444; }
+    .btn-ghost:hover:not(:disabled) { color: #888; background: #111; }
     .btn-full { width: 100%; }
     .btn-blue { background: #0f1e33; border-color: #1a3a5c; color: #60a5fa; }
     .btn-blue:hover:not(:disabled) { background: #142540; color: #93c5fd; }
@@ -110,6 +116,7 @@
     .ai-meta  { font-size: 0.6rem; color: #333; margin-top: 2px; }
     .ai-meta.active { color: #3b82f6; }
     .list-empty { font-size: 0.62rem; color: #333; padding: 4px 0; }
+    .list-empty strong { color: #666; font-weight: 600; }
 
     /* Agent card */
     #agent-card {
@@ -117,12 +124,19 @@
       padding: 9px 10px; display: none; margin-top: 7px;
     }
     #agent-card.visible { display: block; }
-    .ac-name { font-size: 0.75rem; font-weight: 600; color: #f0f0f0; margin-bottom: 6px; }
+    .ac-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+    .ac-name { font-size: 0.75rem; font-weight: 600; color: #f0f0f0; line-height: 1.35; }
     .ac-row {
       display: flex; justify-content: space-between;
       font-size: 0.6rem; padding: 3px 0; border-top: 1px solid #141414; color: #333;
     }
     .ac-val { color: #666; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .agent-kind {
+      font-size: 0.52rem; text-transform: uppercase; letter-spacing: .08em;
+      padding: 2px 6px; border-radius: 999px; flex-shrink: 0;
+      background: #0f1e33; border: 1px solid #1a3a5c; color: #60a5fa;
+    }
+    .agent-kind.persisted { background: #0d2e1a; border-color: #065f46; color: #34d399; }
 
     /* Ephemeral box */
     .eph-box { background: #0a0a0a; border: 1px dashed #1e1e1e; border-radius: 3px; padding: 10px; }
@@ -133,6 +147,15 @@
 
     /* ── Main ────────────────────────────────────────────────── */
     #main-area { display: flex; flex-direction: column; overflow: hidden; }
+    #active-agent-bar {
+      display: none; align-items: center; gap: 10px;
+      min-height: 34px; padding: 0 1.25rem;
+      background: #0a0a0a; border-bottom: 1px solid #141414; flex-shrink: 0;
+    }
+    #active-agent-bar.visible { display: flex; }
+    .aa-name { color: #d0d0d0; font-size: 0.7rem; font-weight: 600; }
+    .aa-meta { color: #444; font-size: 0.6rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .aa-spacer { flex: 1; }
 
     /* Tab bar */
     #tab-bar {
@@ -217,6 +240,14 @@
     #input-area {
       padding: 0.85rem 1.25rem; background: #0d0d0d;
       border-top: 1px solid #1e1e1e; display: flex; gap: 8px; align-items: flex-end; flex-shrink: 0;
+    }
+    #quick-prompts {
+      display: flex; gap: 6px; flex-wrap: wrap;
+      padding: 0.7rem 1.25rem 0; background: #0d0d0d; border-top: 1px solid #1e1e1e;
+    }
+    .prompt-chip {
+      max-width: 260px; overflow: hidden; text-overflow: ellipsis;
+      background: #101010; border-color: #1e1e1e; color: #555;
     }
     #msg-input {
       flex: 1; resize: none; height: 40px; min-height: 40px; max-height: 140px;
@@ -334,6 +365,7 @@
     .tl-table td:not(:first-child) { text-align: right; }
     .tl-table th:not(:first-child) { text-align: right; }
     .empty-note { text-align: center; padding: 2rem; color: #333; font-size: 0.68rem; }
+    .empty-actions { display: flex; gap: 6px; margin-top: 8px; justify-content: center; flex-wrap: wrap; }
 
     /* ── Modal ───────────────────────────────────────────────── */
     #modal-overlay {
@@ -366,6 +398,21 @@
     #toast.show { display: block; }
     #toast.ok  { border-color: #065f46; color: #34d399; }
     #toast.err { border-color: #7f1d1d; color: #f87171; }
+
+    @media (max-width: 860px) {
+      body { height: auto; min-height: 100vh; overflow: auto; }
+      header { flex-wrap: wrap; height: auto; padding: 0.75rem 1rem; gap: 0.6rem; }
+      #url-input { width: min(100%, 260px); }
+      #layout { grid-template-columns: 1fr; overflow: visible; }
+      #sidebar { border-right: none; border-bottom: 1px solid #1e1e1e; max-height: none; }
+      .sb-block.grow { max-height: 220px; }
+      #main-area, .panel { min-height: 620px; }
+      #active-agent-bar { flex-wrap: wrap; padding: 0.55rem 1rem; }
+      .kpi-grid, .two-col { grid-template-columns: 1fr; }
+      #detail-content { flex-direction: column; }
+      #nlp-sidebar { width: auto; border-left: none; border-top: 1px solid #141414; }
+      .msg-row { max-width: 92%; }
+    }
   </style>
 </head>
 <body>
@@ -384,6 +431,7 @@
   </div>
   <div class="h-spacer"></div>
   <span id="ver-tag"></span>
+  <button class="header-btn" onclick="checkHealth()">check</button>
   <span class="toggle-json" onclick="toggleRaw()">JSON</span>
 </header>
 
@@ -408,14 +456,19 @@
         <div class="row">
           <input id="api-key" type="password" placeholder="agent_id.secret" autocomplete="off" />
           <button class="btn-icon" onclick="toggleKey()">👁</button>
+          <button class="btn-icon" onclick="copyKey()" title="Copy token">⧉</button>
         </div>
       </div>
       <button class="btn-full" onclick="loadAgentByKey()">Load agent</button>
       <div id="agent-card">
-        <div class="ac-name" id="ac-name">—</div>
+        <div class="ac-head">
+          <div class="ac-name" id="ac-name">—</div>
+          <span class="agent-kind" id="ac-kind">agent</span>
+        </div>
         <div class="ac-row">id     <span class="ac-val" id="ac-id">—</span></div>
         <div class="ac-row">owner  <span class="ac-val" id="ac-owner">—</span></div>
         <div class="ac-row">model  <span class="ac-val" id="ac-model">—</span></div>
+        <div class="ac-row">status <span class="ac-val" id="ac-status">ready</span></div>
       </div>
     </div>
 
@@ -446,6 +499,13 @@
       <div class="tab-spacer"></div>
       <span id="top-session"></span>
     </div>
+    <div id="active-agent-bar">
+      <span class="agent-kind" id="aa-kind">agent</span>
+      <span class="aa-name" id="aa-name">No agent loaded</span>
+      <span class="aa-meta" id="aa-meta"></span>
+      <span class="aa-spacer"></span>
+      <button class="btn-ghost" onclick="copyKey()">Copy token</button>
+    </div>
 
     <!-- Chat -->
     <div id="chat-panel" class="panel active">
@@ -470,6 +530,11 @@
         <div class="meta-spacer"></div>
         <button id="new-sess-btn" onclick="newSession()">↺ new session</button>
       </div>
+      <div id="quick-prompts">
+        <button class="prompt-chip" onclick="applyPrompt('Responda em uma frase: o que voce pode fazer?')">capabilities</button>
+        <button class="prompt-chip" onclick="applyPrompt('Simule uma duvida de cliente e responda como este agente.')">scenario</button>
+        <button class="prompt-chip" onclick="applyPrompt('Quando voce deve escalar para atendimento humano?')">escalation</button>
+      </div>
       <div id="input-area">
         <textarea id="msg-input"
           placeholder="Send a message… (Enter = send · Shift+Enter = newline)"
@@ -482,7 +547,7 @@
     <div id="sessions-panel" class="panel">
       <div id="sess-list-view">
         <div class="panel-toolbar">
-          <p>Closed sessions for the active agent.</p>
+          <p id="sessions-note">Closed sessions for the active agent.</p>
           <button onclick="loadSessions()">↺ Refresh</button>
         </div>
         <div class="panel-body">
@@ -504,7 +569,7 @@
     <!-- Analytics -->
     <div id="analytics-panel" class="panel">
       <div class="panel-toolbar">
-        <p>Aggregate analytics — requires closed sessions.</p>
+        <p id="analytics-note">Aggregate analytics — requires closed sessions.</p>
         <button onclick="loadAnalytics()">↺ Refresh</button>
       </div>
       <div class="analytics-body" id="analytics-body">
@@ -536,6 +601,7 @@
 let _sessionId   = null;
 let _bearerToken = null;  // current active bearer
 let _pendingPayload = null;
+let _activeAgent = null;
 
 // ── Helpers ───────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -573,6 +639,22 @@ function toggleKey() {
   i.type = i.type === 'password' ? 'text' : 'password';
 }
 
+async function copyKey() {
+  const key = $('api-key').value.trim();
+  if (!key) { toast('No token to copy', 'err'); return; }
+  try {
+    await navigator.clipboard.writeText(key);
+    toast('Token copied');
+  } catch {
+    toast('Could not copy token', 'err');
+  }
+}
+
+function applyPrompt(text) {
+  $('msg-input').value = text;
+  $('msg-input').focus();
+}
+
 // ── Health ────────────────────────────────────────────────────
 async function checkHealth() {
   try {
@@ -594,6 +676,16 @@ function setStatus(type, text) {
   $('status-text').textContent = text;
 }
 
+function setNotesForAgent() {
+  const isEphemeral = _activeAgent?.kind === 'ephemeral';
+  $('sessions-note').textContent = isEphemeral
+    ? 'Ephemeral sessions are read from Redis and expire with the test agent.'
+    : 'Closed sessions for the active agent.';
+  $('analytics-note').textContent = isEphemeral
+    ? 'Temporary analytics from Redis for the active ephemeral agent.'
+    : 'Aggregate analytics — requires closed sessions.';
+}
+
 // ── Agent list ────────────────────────────────────────────────
 async function loadAgentList() {
   const el = $('agent-list');
@@ -602,7 +694,10 @@ async function loadAgentList() {
     const r = await fetch(base() + '/dev/agents');
     if (!r.ok) { el.innerHTML = '<div class="list-empty">Not available (dev mode only)</div>'; return; }
     const agents = await r.json();
-    if (!agents.length) { el.innerHTML = '<div class="list-empty">No agents found.</div>'; return; }
+    if (!agents.length) {
+      el.innerHTML = '<div class="list-empty"><strong>No persisted agents.</strong><br>Create an ephemeral one below for a quick test.</div>';
+      return;
+    }
     el.innerHTML = '';
     agents.forEach(a => {
       const div = document.createElement('div');
@@ -632,7 +727,7 @@ async function selectAgent(a, el) {
     if (!r.ok) { toast(d.detail || 'Failed to rotate token', 'err'); return; }
     _bearerToken = d.bearer_token;
     $('api-key').value = d.bearer_token;
-    setAgentCard(a.name, a.agent_id, a.owner, a.ai_model || 'env default');
+    setAgentCard(a.name, a.agent_id, a.owner, a.ai_model || 'env default', 'persisted');
     newSession();
     toast(`"${a.name}" selected`);
   } catch { toast('Connection error', 'err'); }
@@ -646,18 +741,37 @@ async function loadAgentByKey() {
   try {
     const { ok, data } = await apiFetch('GET', '/agent');
     if (!ok) { toast(data.detail || 'Invalid API key', 'err'); _bearerToken = null; return; }
-    setAgentCard(data.name, data.agent_id, data.owner, data.ai_model || 'env default');
+    const kind = data.owner === 'ephemeral' ? 'ephemeral' : 'persisted';
+    setAgentCard(data.name, data.agent_id, data.owner, data.ai_model || 'env default', kind);
     newSession();
     toast(`"${data.name}" loaded`);
   } catch { toast('Connection error', 'err'); _bearerToken = null; }
 }
 
-function setAgentCard(name, id, owner, model) {
+function setAgentCard(name, id, owner, model, kind = 'persisted') {
+  _activeAgent = { name, id, owner, model, kind };
   $('ac-name').textContent  = name;
   $('ac-id').textContent    = id;
   $('ac-owner').textContent = owner;
   $('ac-model').textContent = model;
+  $('ac-kind').textContent = kind;
+  $('ac-kind').className = `agent-kind ${kind === 'persisted' ? 'persisted' : ''}`;
+  $('ac-status').textContent = kind === 'ephemeral' ? 'Redis TTL 24h' : 'ready';
   $('agent-card').classList.add('visible');
+  updateActiveAgentBar();
+  setNotesForAgent();
+}
+
+function updateActiveAgentBar() {
+  if (!_activeAgent) {
+    $('active-agent-bar').classList.remove('visible');
+    return;
+  }
+  $('aa-kind').textContent = _activeAgent.kind;
+  $('aa-kind').className = `agent-kind ${_activeAgent.kind === 'persisted' ? 'persisted' : ''}`;
+  $('aa-name').textContent = _activeAgent.name;
+  $('aa-meta').textContent = `${_activeAgent.owner} · ${_activeAgent.model} · ${_activeAgent.id}`;
+  $('active-agent-bar').classList.add('visible');
 }
 
 // ── Tabs ──────────────────────────────────────────────────────
@@ -666,6 +780,9 @@ function switchTab(name) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelector(`[onclick="switchTab('${name}')"]`).classList.add('active');
   $(`${name}-panel`).classList.add('active');
+  if (_activeAgent?.kind === 'ephemeral' && (name === 'sessions' || name === 'analytics')) {
+    toast('Showing temporary Redis data for this ephemeral agent.');
+  }
 }
 
 // ── Session ───────────────────────────────────────────────────
@@ -673,8 +790,25 @@ function newSession() {
   _sessionId = crypto.randomUUID();
   $('session-display').textContent = _sessionId;
   $('top-session').textContent = _sessionId.slice(0, 8) + '…';
-  $('messages').innerHTML = '';
+  $('messages').innerHTML = emptyStateHtml();
   clearMeta();
+}
+
+function emptyStateHtml() {
+  const agentLine = _activeAgent
+    ? `<div class="empty-title">${_activeAgent.name}</div>`
+    : '<div class="empty-title">agent-test</div>';
+  return `
+    <div id="empty-state">
+      <div class="empty-icon">⚡</div>
+      ${agentLine}
+      <div class="empty-steps">
+        <div class="empty-step"><div class="step-n">1</div>${_activeAgent ? 'Agent loaded and ready' : 'Select an agent, paste a key, or create an ephemeral one'}</div>
+        <div class="empty-step"><div class="step-n">2</div>Send a message from the composer</div>
+        <div class="empty-step"><div class="step-n">3</div>Inspect tokens, latency and raw JSON when needed</div>
+      </div>
+    </div>
+  `;
 }
 
 function clearMeta() {
@@ -695,9 +829,14 @@ async function sendMessage() {
   const tid = appendTyping();
 
   try {
-    const { ok, data } = await apiFetch('POST', '/chat', { session_id: _sessionId, message: text });
+    const { ok, status, data } = await apiFetch('POST', '/chat', { session_id: _sessionId, message: text });
     removeTyping(tid);
-    if (!ok) { toast(data.detail || `Error ${data.status || ''}`, 'err'); $('send-btn').disabled = false; return; }
+    if (!ok) {
+      appendMsg('assistant', data.detail || `Request failed with status ${status}`);
+      toast(data.detail || `Error ${data.status || ''}`, 'err');
+      $('send-btn').disabled = false;
+      return;
+    }
 
     $('raw-content').textContent = JSON.stringify(data, null, 2);
     const asst = data.conversation?.find(e => e.message.role === 'assistant');
@@ -759,9 +898,11 @@ async function loadSessions() {
   const wrap = $('sess-grid-wrap');
   wrap.innerHTML = '<div class="empty-note">Loading…</div>';
   try {
-    const { ok, data } = await apiFetch('GET', '/data/chat');
+    const path = _activeAgent?.kind === 'ephemeral' ? '/dev/agent/ephemeral/sessions' : '/data/chat';
+    const { ok, data } = await apiFetch('GET', path);
     if (!ok || !data.chats?.length) {
-      wrap.innerHTML = '<div class="empty-note">No closed sessions yet.</div>'; return;
+      wrap.innerHTML = `<div class="empty-note">${_activeAgent?.kind === 'ephemeral' ? 'No ephemeral sessions yet. Send a chat message first.' : 'No closed sessions yet.'}</div>`;
+      return;
     }
     const sorted = [...data.chats].sort((a, b) => (b.ended_at || '').localeCompare(a.ended_at || ''));
     wrap.innerHTML = '';
@@ -794,6 +935,13 @@ async function openSession(sid) {
   $('nlp-sidebar').innerHTML = '';
 
   try {
+    if (_activeAgent?.kind === 'ephemeral') {
+      const { ok, data } = await apiFetch('GET', `/dev/agent/ephemeral/sessions/${sid}`);
+      if (!ok) { $('transcript').innerHTML = '<div class="empty-note">Session not found.</div>'; return; }
+      renderSessionDetail(data.conversation || [], data.sentiment, data.topics, data.metrics);
+      return;
+    }
+
     const [histRes, sentRes, topRes, metRes] = await Promise.all([
       apiFetch('GET', `/data/chat/${sid}`),
       apiFetch('GET', `/data/chat/${sid}/insights/sentiment`),
@@ -801,67 +949,72 @@ async function openSession(sid) {
       apiFetch('GET', `/data/chat/${sid}/insights/metrics`),
     ]);
 
-    // Transcript
-    const tr = $('transcript');
-    tr.innerHTML = '';
-    const history = histRes.data?.conversation || [];
-    if (!history.length) { tr.innerHTML = '<div class="empty-note">No messages.</div>'; }
-    else history.forEach(entry => {
-      const m = entry.message;
-      const wrap = document.createElement('div');
-      wrap.className = `msg-row ${m.role}`;
-      const bubble = document.createElement('div');
-      bubble.className = 'msg-bubble';
-      bubble.textContent = m.content;
-      const meta = document.createElement('div');
-      meta.className = 'msg-meta';
-      meta.textContent = m.tokens ? `${m.tokens} tok` : '';
-      wrap.appendChild(bubble);
-      wrap.appendChild(meta);
-      tr.appendChild(wrap);
-    });
-
-    // NLP sidebar
-    const nl = $('nlp-sidebar');
-    if (sentRes.ok) {
-      const s = sentRes.data.sentiment;
-      const score = s?.score ?? 0;
-      const label = s?.label ?? 'neutral';
-      const scoreClass = label === 'positive' ? 'score-pos' : label === 'negative' ? 'score-neg' : 'score-neu';
-      nl.innerHTML += `
-        <div>
-          <div class="nlp-section-title">Sentiment</div>
-          <div class="${scoreClass} score-big">${score >= 0 ? '+' : ''}${score.toFixed(3)}</div>
-          <div style="font-size:.6rem;color:#333;margin-top:3px">${label}</div>
-        </div>
-      `;
-    }
-    if (topRes.ok) {
-      const t = topRes.data.topics;
-      const chips = (t?.detected || []).map(tp =>
-        `<span class="topic-chip${tp === t.main_topic ? ' main' : ''}">${tp}</span>`
-      ).join('') || '<span style="color:#333;font-size:.6rem">none detected</span>';
-      nl.innerHTML += `
-        <div>
-          <div class="nlp-section-title">Topics</div>
-          <div class="topics-wrap">${chips}</div>
-          ${t?.intent ? `<div style="font-size:.6rem;color:#555;margin-top:6px">intent: <span style="color:#3b82f6">${t.intent}</span></div>` : ''}
-        </div>
-      `;
-    }
-    if (metRes.ok) {
-      const m = metRes.data.metrics;
-      if (m) nl.innerHTML += `
-        <div>
-          <div class="nlp-section-title">Metrics</div>
-          <div class="kv-row"><span class="kv-key">messages</span><span class="kv-val">${m.total_messages}</span></div>
-          <div class="kv-row"><span class="kv-key">tokens</span><span class="kv-val">${m.total_tokens}</span></div>
-          <div class="kv-row"><span class="kv-key">avg msg</span><span class="kv-val">${m.avg_user_message_length?.toFixed(0) ?? '—'} chars</span></div>
-          <div class="kv-row"><span class="kv-key">avg rt</span><span class="kv-val">${m.avg_response_time_ms > 0 ? m.avg_response_time_ms + 'ms' : '—'}</span></div>
-        </div>
-      `;
-  }
+    renderSessionDetail(
+      histRes.data?.conversation || [],
+      sentRes.ok ? sentRes.data.sentiment : null,
+      topRes.ok ? topRes.data.topics : null,
+      metRes.ok ? metRes.data.metrics : null,
+    );
   } catch { $('transcript').innerHTML = '<div class="empty-note">Connection error.</div>'; }
+}
+
+function renderSessionDetail(history, sentiment, topics, metrics) {
+  const tr = $('transcript');
+  tr.innerHTML = '';
+  if (!history.length) { tr.innerHTML = '<div class="empty-note">No messages.</div>'; }
+  else history.forEach(entry => {
+    const m = entry.message;
+    const wrap = document.createElement('div');
+    wrap.className = `msg-row ${m.role}`;
+    const bubble = document.createElement('div');
+    bubble.className = 'msg-bubble';
+    bubble.textContent = m.content;
+    const meta = document.createElement('div');
+    meta.className = 'msg-meta';
+    meta.textContent = m.tokens ? `${m.tokens} tok` : '';
+    wrap.appendChild(bubble);
+    wrap.appendChild(meta);
+    tr.appendChild(wrap);
+  });
+
+  const nl = $('nlp-sidebar');
+  nl.innerHTML = '';
+  if (sentiment) {
+    const score = sentiment.score ?? 0;
+    const label = sentiment.label ?? 'neutral';
+    const scoreClass = label === 'positive' ? 'score-pos' : label === 'negative' ? 'score-neg' : 'score-neu';
+    nl.innerHTML += `
+      <div>
+        <div class="nlp-section-title">Sentiment</div>
+        <div class="${scoreClass} score-big">${score >= 0 ? '+' : ''}${score.toFixed(3)}</div>
+        <div style="font-size:.6rem;color:#333;margin-top:3px">${label}</div>
+      </div>
+    `;
+  }
+  if (topics) {
+    const chips = (topics.detected || []).map(tp =>
+      `<span class="topic-chip${tp === topics.main_topic ? ' main' : ''}">${tp}</span>`
+    ).join('') || '<span style="color:#333;font-size:.6rem">none detected</span>';
+    nl.innerHTML += `
+      <div>
+        <div class="nlp-section-title">Topics</div>
+        <div class="topics-wrap">${chips}</div>
+        ${topics.intent ? `<div style="font-size:.6rem;color:#555;margin-top:6px">intent: <span style="color:#3b82f6">${topics.intent}</span></div>` : ''}
+      </div>
+    `;
+  }
+  if (metrics) {
+    nl.innerHTML += `
+      <div>
+        <div class="nlp-section-title">Metrics</div>
+        <div class="kv-row"><span class="kv-key">messages</span><span class="kv-val">${metrics.total_messages}</span></div>
+        <div class="kv-row"><span class="kv-key">tokens</span><span class="kv-val">${metrics.total_tokens}</span></div>
+        <div class="kv-row"><span class="kv-key">avg msg</span><span class="kv-val">${metrics.avg_user_message_length?.toFixed(0) ?? '—'} chars</span></div>
+        <div class="kv-row"><span class="kv-key">avg rt</span><span class="kv-val">${metrics.avg_response_time_ms > 0 ? metrics.avg_response_time_ms + 'ms' : '—'}</span></div>
+        <div class="kv-row"><span class="kv-key">state</span><span class="kv-val">${metrics.resolution || 'open'}</span></div>
+      </div>
+    `;
+  }
 }
 
 function backToList() {
@@ -875,7 +1028,8 @@ async function loadAnalytics() {
   const body = $('analytics-body');
   body.innerHTML = '<div class="empty-note">Loading…</div>';
   try {
-    const { ok, data } = await apiFetch('GET', '/data/analytics');
+    const path = _activeAgent?.kind === 'ephemeral' ? '/dev/agent/ephemeral/analytics' : '/data/analytics';
+    const { ok, data } = await apiFetch('GET', path);
     if (!ok) { body.innerHTML = '<div class="empty-note">Error loading analytics.</div>'; return; }
     body.innerHTML = '';
     renderKPIs(data.summary);
@@ -1068,7 +1222,7 @@ async function generateAndCreate() {
     if (!r.ok) { toast(data.detail || 'Error creating agent', 'err'); return; }
     _bearerToken = data.api_key;
     $('api-key').value = data.api_key;
-    setAgentCard(data.name, data.agent_id, '— ephemeral', 'env default');
+    setAgentCard(data.name, data.agent_id, 'ephemeral', 'env default', 'ephemeral');
     closeModal();
     newSession();
     toast(`"${data.name}" created (Redis, 24h)`);
